@@ -1,0 +1,12 @@
+node_modules/
+data/
+.env
+.env.local
+package-lock.json
+package.json
+assets/design-guides/log_*.txt
+scripts/convert_*.py
+produto-planners.psd
+WHATSAPP-BOT-X1/assets/produto-planners.jpg
+WHATSAPP-BOT-X1/assets/design-guides/log_*.txt
+WHATSAPP-BOT-X1/scripts/

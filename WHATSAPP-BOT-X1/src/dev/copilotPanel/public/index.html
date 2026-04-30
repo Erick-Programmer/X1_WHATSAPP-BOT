@@ -1,0 +1,707 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel Copiloto</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f0f2f5; color: #1a1a2e; padding: 20px; }
+h1 { font-size: 1.4rem; margin-bottom: 16px; color: #16213e; }
+h2 { font-size: 1.1rem; margin-bottom: 8px; color: #0f3460; }
+.container { max-width: 900px; margin: 0 auto; }
+.card { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.flex { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.btn { padding: 6px 14px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
+.btn-primary { background: #0f3460; color: #fff; }
+.btn-primary:hover { background: #16213e; }
+.btn-success { background: #27ae60; color: #fff; }
+.btn-success:hover { background: #219a52; }
+.btn-danger { background: #e74c3c; color: #fff; }
+.btn-danger:hover { background: #c0392b; }
+.btn-warning { background: #f39c12; color: #fff; }
+.btn-warning:hover { background: #d68910; }
+.btn-secondary { background: #7f8c8d; color: #fff; }
+.btn-secondary:hover { background: #6c7a7b; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+input[type="text"] { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85rem; flex: 1; min-width: 200px; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 0.75rem; font-weight: 600; }
+.tag-pending { background: #fef3cd; color: #856404; }
+.tag-approved { background: #d4edda; color: #155724; }
+.tag-sent { background: #cce5ff; color: #004085; }
+.tag-cancelled { background: #f8d7da; color: #721c24; }
+.tag-expired { background: #e2e3e5; color: #383d41; }
+.tag-sale-yes { background: #d4edda; color: #155724; border: 1px solid #155724; }
+.tag-sale-no { background: #f8d7da; color: #721c24; border: 1px solid #721c24; }
+.tag-safe-mode { background: #fef3cd; color: #856404; border: 1px solid #856404; }
+.tag-armed-off { background: #f8d7da; color: #721c24; border: 1px solid #721c24; }
+.tag-live-on { background: #d4edda; color: #155724; border: 1px solid #155724; }
+.tag-env-blocked { background: #f8d7da; color: #721c24; border: 1px solid #721c24; }
+.tag-env-allowed { background: #d4edda; color: #155724; border: 1px solid #155724; }
+.suggestion { border: 1px solid #e0e0e0; border-radius: 4px; padding: 10px; margin-bottom: 8px; }
+.suggestion-text { font-size: 0.85rem; margin-bottom: 6px; color: #333; }
+.suggestion-meta { font-size: 0.75rem; color: #666; margin-bottom: 6px; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
+.stat-item { text-align: center; }
+.stat-value { font-size: 1.5rem; font-weight: 700; color: #0f3460; }
+.stat-label { font-size: 0.75rem; color: #666; }
+.empty { color: #999; font-style: italic; font-size: 0.85rem; }
+.error-msg { color: #e74c3c; font-size: 0.8rem; margin-top: 4px; }
+.success-msg { color: #27ae60; font-size: 0.8rem; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>PAINEL COPILOTO - MODO ATENDIMENTO</h1>
+
+  <!-- Bot runtime state -->
+  <div class="card">
+    <h2>Status do Bot</h2>
+    <div class="flex" style="margin-bottom:8px;">
+      <strong>Modo:</strong>
+      <span id="runtimeModeBadge"></span>
+    </div>
+    <div class="flex" style="margin-bottom:8px;">
+      <strong>Envio real:</strong>
+      <span id="runtimeEnvBadge"></span>
+    </div>
+    <div class="flex" style="margin-top:8px;">
+      <button class="btn btn-success" id="btnEnable" onclick="handleEnable()">LIGAR BOT</button>
+      <button class="btn btn-danger" id="btnDisable" onclick="handleDisable()">DESLIGAR BOT</button>
+      <button class="btn btn-warning" id="btnSafeMode" onclick="handleSafeMode()">MODO TESTE</button>
+    </div>
+    <div id="runtimeMsg" class="success-msg"></div>
+  </div>
+
+  <!-- Credenciais WhatsApp Cloud API -->
+  <div class="card" id="credentialsCard">
+    <h2>Credenciais WhatsApp Cloud API</h2>
+    <div id="credentialsContent"></div>
+  </div>
+
+  <!-- ConfiguraÃ§Ã£o Comercial -->
+  <div class="card" id="commercialCard">
+    <h2>ConfiguraÃ§Ã£o Comercial</h2>
+    <div id="commercialContent"></div>
+  </div>
+
+  <!-- Create mock message -->
+  <div class="card">
+    <h2>Criar mensagem mockada</h2>
+    <div class="flex">
+      <input type="text" id="mockMessage" value="quanto custa?" placeholder="Mensagem do cliente...">
+      <button class="btn btn-primary" onclick="createMockMessage()">Criar</button>
+    </div>
+    <div id="createError" class="error-msg"></div>
+  </div>
+
+  <!-- Reviews -->
+  <div id="reviewsContainer"></div>
+
+  <!-- Stats -->
+  <div class="card">
+    <h2>Metricas</h2>
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-item"><div class="stat-value" id="statSent">0</div><div class="stat-label">Enviados</div></div>
+      <div class="stat-item"><div class="stat-value" id="statOutcomes">0</div><div class="stat-label">Sale Outcome</div></div>
+      <div class="stat-item"><div class="stat-value" id="statSales">0</div><div class="stat-label">Vendas</div></div>
+      <div class="stat-item"><div class="stat-value" id="statConv">0.00%</div><div class="stat-label">Conversao</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(API + path, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Erro desconhecido');
+  return data;
+}
+
+function statusTag(status) {
+  const map = {
+    pending_review: 'tag-pending',
+    approved: 'tag-approved',
+    sent: 'tag-sent',
+    cancelled: 'tag-cancelled',
+    expired: 'tag-expired'
+  };
+  return '<span class="tag ' + (map[status] || '') + '">' + status + '</span>';
+}
+
+function renderReviews(reviews) {
+  const container = document.getElementById('reviewsContainer');
+  if (!reviews || reviews.length === 0) {
+    container.innerHTML = '<div class="card"><div class="empty">Nenhum atendimento ainda.</div></div>';
+    return;
+  }
+
+  let html = '';
+  for (const r of reviews) {
+    const isPending = r.status === 'pending_review';
+    const isSent = r.status === 'sent';
+    const hasOutcome = r.saleOutcome && (r.saleOutcome.sale !== undefined);
+
+    html += '<div class="card">' +
+      '<div class="flex" style="justify-content:space-between;margin-bottom:8px;">' +
+        '<strong>Review: ' + r.id.substring(0,8) + '...</strong>' +
+        statusTag(r.status) +
+      '</div>' +
+      '<div style="font-size:0.85rem;margin-bottom:8px;">' +
+        '<div><strong>Contato:</strong> ' + r.contactId + '</div>' +
+        '<div><strong>Mensagem:</strong> "' + r.customerMessage + '"</div>' +
+        '<div><strong>Intencao:</strong> ' + r.intent + '</div>' +
+      '</div>';
+
+    // Suggestions
+    if (r.suggestions && r.suggestions.length > 0) {
+      html += '<div><strong>Sugestoes:</strong></div>';
+      for (const s of r.suggestions) {
+        const validated = s.validated ? 'OK' : 'FALHOU';
+        html += '<div class="suggestion">' +
+          '<div class="suggestion-meta">[' + s.type + '] QA: ' + validated + '</div>' +
+          '<div class="suggestion-text">' + s.text + '</div>';
+        if (isPending) {
+          html += '<div class="flex">' +
+            '<button class="btn btn-success" onclick="approveAndSend(\'' + r.id + '\',\'' + s.id + '\')">Enviar</button>' +
+          '</div>';
+        }
+        html += '</div>';
+      }
+    }
+
+    // Action buttons: pending_review
+    if (isPending) {
+      html += '<div class="flex" style="margin-top:8px;">' +
+        '<button class="btn btn-warning" onclick="regenerate(\'' + r.id + '\')">Gerar outras 3</button>' +
+        '<button class="btn btn-danger" onclick="cancelReview(\'' + r.id + '\')">Cancelar</button>' +
+      '</div>';
+    }
+
+    // Action buttons: sent without outcome
+    if (isSent && !hasOutcome) {
+      html += '<div class="flex" style="margin-top:8px;">' +
+        '<button class="btn btn-success" onclick="markSale(\'' + r.id + '\',true)">Marcar venda</button>' +
+        '<button class="btn btn-secondary" onclick="markSale(\'' + r.id + '\',false)">Marcar nao venda</button>' +
+      '</div>';
+    }
+
+    // Outcome badge: sent with outcome
+    if (isSent && hasOutcome) {
+      const outcomeClass = r.saleOutcome.sale ? 'tag-sale-yes' : 'tag-sale-no';
+      const outcomeText = r.saleOutcome.sale ? 'Venda registrada' : 'Nao venda registrada';
+      html += '<div class="flex" style="margin-top:8px;">' +
+        '<span class="tag ' + outcomeClass + '">' + outcomeText + '</span>' +
+      '</div>';
+    }
+
+    html += '<div id="msg-' + r.id + '" class="success-msg"></div>' +
+    '</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+async function loadReviews() {
+  try {
+    const data = await api('GET', '/api/reviews');
+    renderReviews(data);
+  } catch (e) {
+    document.getElementById('reviewsContainer').innerHTML =
+      '<div class="card"><div class="error-msg">Erro ao carregar: ' + e.message + '</div></div>';
+  }
+}
+
+async function loadStats() {
+  try {
+    const s = await api('GET', '/api/stats');
+    document.getElementById('statSent').textContent = s.totalSent;
+    document.getElementById('statOutcomes').textContent = s.totalSaleOutcomes;
+    document.getElementById('statSales').textContent = s.totalSales;
+    document.getElementById('statConv').textContent = s.conversion;
+  } catch (e) {
+    // silent
+  }
+}
+
+async function createMockMessage() {
+  const msg = document.getElementById('mockMessage').value.trim() || 'quanto custa?';
+  const errEl = document.getElementById('createError');
+  errEl.textContent = '';
+  try {
+    await api('POST', '/api/mock-message', { message: msg });
+    document.getElementById('mockMessage').value = '';
+    await loadReviews();
+    await loadStats();
+  } catch (e) {
+    errEl.textContent = 'Erro: ' + e.message;
+  }
+}
+
+async function approveAndSend(reviewId, suggestionId) {
+  const msgEl = document.getElementById('msg-' + reviewId);
+  msgEl.textContent = '';
+  try {
+    await api('POST', '/api/reviews/' + reviewId + '/approve-send', { suggestionId });
+    msgEl.textContent = 'Enviado com sucesso!';
+    await loadReviews();
+    await loadStats();
+  } catch (e) {
+    msgEl.className = 'error-msg';
+    msgEl.textContent = 'Erro: ' + e.message;
+  }
+}
+
+async function regenerate(reviewId) {
+  const msgEl = document.getElementById('msg-' + reviewId);
+  msgEl.textContent = '';
+  try {
+    await api('POST', '/api/reviews/' + reviewId + '/regenerate');
+    msgEl.textContent = 'Novas sugestoes geradas!';
+    await loadReviews();
+  } catch (e) {
+    msgEl.className = 'error-msg';
+    msgEl.textContent = 'Erro: ' + e.message;
+  }
+}
+
+async function markSale(reviewId, sale) {
+  const msgEl = document.getElementById('msg-' + reviewId);
+  msgEl.textContent = '';
+  try {
+    await api('POST', '/api/reviews/' + reviewId + '/sale', { sale });
+    msgEl.textContent = sale ? 'Venda marcada!' : 'Nao venda marcada!';
+    await loadStats();
+  } catch (e) {
+    msgEl.className = 'error-msg';
+    msgEl.textContent = 'Erro: ' + e.message;
+  }
+}
+
+async function cancelReview(reviewId) {
+  const msgEl = document.getElementById('msg-' + reviewId);
+  msgEl.textContent = '';
+  try {
+    await api('POST', '/api/reviews/' + reviewId + '/cancel');
+    msgEl.textContent = 'Cancelado!';
+    await loadReviews();
+  } catch (e) {
+    msgEl.className = 'error-msg';
+    msgEl.textContent = 'Erro: ' + e.message;
+  }
+}
+
+// â”€â”€â”€ Runtime state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+let runtimeState = null;
+
+async function loadRuntime() {
+  try {
+    runtimeState = await api('GET', '/api/runtime');
+    renderRuntime(runtimeState);
+  } catch (e) {
+    // silent
+  }
+}
+
+function renderRuntime(state) {
+  const modeMap = {
+    safe_mode: { cls: 'tag-safe-mode', label: 'MODO TESTE' },
+    armed_off: { cls: 'tag-armed-off', label: 'BOT DESLIGADO' },
+    live_on: { cls: 'tag-live-on', label: 'BOT LIGADO' }
+  };
+  const m = modeMap[state.mode] || { cls: '', label: state.mode };
+  document.getElementById('runtimeModeBadge').innerHTML =
+    '<span class="tag ' + m.cls + '">' + m.label + '</span>';
+
+  if (state.realSendAllowed) {
+    document.getElementById('runtimeEnvBadge').innerHTML =
+      '<span class="tag tag-env-allowed">Envio real permitido</span>';
+  } else {
+    document.getElementById('runtimeEnvBadge').innerHTML =
+      '<span class="tag tag-env-blocked">Envio real bloqueado pelo .env</span>';
+  }
+
+  document.getElementById('btnEnable').disabled = !state.canGoLive;
+  document.getElementById('btnDisable').disabled = state.mode !== 'live_on';
+  document.getElementById('btnSafeMode').disabled = state.mode === 'safe_mode';
+}
+
+async function handleEnable() {
+  const msgEl = document.getElementById('runtimeMsg');
+  msgEl.textContent = '';
+  msgEl.className = 'success-msg';
+  if (!confirm('VocÃª tem certeza que deseja ligar o envio real?')) return;
+  try {
+    await api('POST', '/api/runtime/enable');
+    msgEl.textContent = 'Bot ligado!';
+    await loadRuntime();
+  } catch (e) {
+    msgEl.className = 'error-msg';
+    msgEl.textContent = 'Erro: ' + e.message;
+  }
+}
+
+async function handleDisable() {
+  const msgEl = document.getElementById('runtimeMsg');
+  msgEl.textContent = '';
+  msgEl.className = 'success-msg';
+  const pending = runtimeState ? runtimeState.pendingReviewsCount : 0;
+  if (!confirm('Existem ' + pending + ' mensagens pendentes. VocÃª quer mesmo desligar o bot?')) return;
+  try {
+    const result = await api('POST', '/api/runtime/disable');
+    msgEl.textContent = 'Bot desligado!';
+    await loadRuntime();
+  } catch (e) {
+    msgEl.className = 'error-msg';
+    msgEl.textContent = 'Erro: ' + e.message;
+  }
+}
+
+async function handleSafeMode() {
+  const msgEl = document.getElementById('runtimeMsg');
+  msgEl.textContent = '';
+  msgEl.className = 'success-msg';
+  if (runtimeState && runtimeState.mode === 'live_on') {
+    alert('Bot ligado. Desligue antes de entrar em modo teste.');
+    return;
+  }
+  try {
+    await api('POST', '/api/runtime/safe-mode');
+    msgEl.textContent = 'Modo teste ativado!';
+    await loadRuntime();
+  } catch (e) {
+    msgEl.className = 'error-msg';
+    msgEl.textContent = 'Erro: ' + e.message;
+  }
+}
+
+// â”€â”€â”€ Credentials â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+let credentialsState = null;
+let showCredentialsForm = false;
+
+async function loadCredentials() {
+  try {
+    credentialsState = await api('GET', '/api/credentials/status');
+    renderCredentials(credentialsState);
+  } catch (e) {
+    // silent
+  }
+}
+
+function renderCredentials(state) {
+  const container = document.getElementById('credentialsContent');
+  if (!state.hasCredentials || showCredentialsForm) {
+    // Show form
+    container.innerHTML = '' +
+      '<div style="margin-bottom:8px;font-size:0.85rem;color:#666;">' +
+        'Preencha as credenciais do WhatsApp Cloud API.' +
+      '</div>' +
+      '<div style="margin-bottom:6px;">' +
+        '<label style="font-size:0.8rem;font-weight:600;">WA_API_TOKEN</label>' +
+        '<input type="password" id="credApiToken" placeholder="Token da API" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;">' +
+      '</div>' +
+      '<div style="margin-bottom:6px;">' +
+        '<label style="font-size:0.8rem;font-weight:600;">WA_PHONE_NUMBER_ID</label>' +
+        '<input type="text" id="credPhoneNumberId" placeholder="ID do n\u00famero de telefone" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;">' +
+      '</div>' +
+      '<div style="margin-bottom:6px;">' +
+        '<label style="font-size:0.8rem;font-weight:600;">WA_BUSINESS_ACCOUNT_ID</label>' +
+        '<input type="text" id="credBusinessAccountId" placeholder="ID da conta de neg\u00f3cios" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;">' +
+      '</div>' +
+      '<div style="margin-bottom:6px;">' +
+        '<label style="font-size:0.8rem;font-weight:600;">WA_VERIFY_TOKEN</label>' +
+        '<input type="password" id="credVerifyToken" placeholder="Verify token" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;">' +
+      '</div>' +
+      '<div class="flex" style="margin-top:8px;">' +
+        '<button class="btn btn-primary" onclick="handleSaveCredentials()">Salvar credenciais</button>' +
+        (state.hasCredentials ? '<button class="btn btn-secondary" onclick="cancelCredentialsForm()">Cancelar</button>' : '') +
+      '</div>' +
+      '<div id="credMsg" class="success-msg"></div>';
+    return;
+  }
+
+  // Show masked credentials
+  const m = state.maskedCredentials;
+  const savedAt = state.savedAt ? new Date(state.savedAt).toLocaleString('pt-BR') : '-';
+  const lastUsedAt = state.lastUsedAt ? new Date(state.lastUsedAt).toLocaleString('pt-BR') : 'Nunca usada';
+
+  container.innerHTML = '' +
+    '<div style="font-size:0.85rem;margin-bottom:8px;">' +
+      '<div><strong>Token:</strong> ' + m.apiToken + '</div>' +
+      '<div><strong>Phone ID:</strong> ' + m.phoneNumberId + '</div>' +
+      '<div><strong>Business ID:</strong> ' + m.businessAccountId + '</div>' +
+      '<div><strong>Verify:</strong> ' + m.verifyToken + '</div>' +
+      '<div style="margin-top:4px;color:#666;"><strong>Salvo em:</strong> ' + savedAt + '</div>' +
+      '<div style="color:#666;"><strong>\u00daltimo uso:</strong> ' + lastUsedAt + '</div>' +
+    '</div>' +
+    '<div style="margin-bottom:8px;">' +
+      '<span class="tag tag-env-blocked">Credenciais salvas n\u00e3o ativam envio real sozinhas.</span>' +
+    '</div>' +
+    '<div class="flex">' +
+      '<button class="btn btn-success" onclick="handleUseCredentials()">Usar credencial salva</button>' +
+      '<button class="btn btn-warning" onclick="handleToggleCredentialsForm()">Trocar credencial</button>' +
+      '<button class="btn btn-danger" onclick="handleClearCredentials()">Apagar credenciais</button>' +
+    '</div>' +
+    '<div id="credMsg" class="success-msg"></div>';
+}
+
+function cancelCredentialsForm() {
+  showCredentialsForm = false;
+  renderCredentials(credentialsState);
+}
+
+function handleToggleCredentialsForm() {
+  showCredentialsForm = true;
+  renderCredentials(credentialsState);
+}
+
+async function handleSaveCredentials() {
+  const msgEl = document.getElementById('credMsg');
+  msgEl.textContent = '';
+  msgEl.className = 'success-msg';
+  const apiToken = document.getElementById('credApiToken').value;
+  const phoneNumberId = document.getElementById('credPhoneNumberId').value;
+  const businessAccountId = document.getElementById('credBusinessAccountId').value;
+  const verifyToken = document.getElementById('credVerifyToken').value;
+  try {
+    credentialsState = await api('POST', '/api/credentials/save', { apiToken, phoneNumberId, businessAccountId, verifyToken });
+    showCredentialsForm = false;
+    renderCredentials(credentialsState);
+    msgEl.textContent = 'Credenciais salvas com sucesso!';
+  } catch (e) {
+    msgEl.className = 'error-msg';
+    msgEl.textContent = 'Erro: ' + e.message;
+  }
+}
+
+async function handleUseCredentials() {
+  const msgEl = document.getElementById('credMsg');
+  msgEl.textContent = '';
+  msgEl.className = 'success-msg';
+  try {
+    credentialsState = await api('POST', '/api/credentials/use-saved');
+    renderCredentials(credentialsState);
+    msgEl.textContent = 'Credencial marcada como usada!';
+  } catch (e) {
+    msgEl.className = 'error-msg';
+    msgEl.textContent = 'Erro: ' + e.message;
+  }
+}
+
+async function handleClearCredentials() {
+  const msgEl = document.getElementById('credMsg');
+  msgEl.textContent = '';
+  msgEl.className = 'success-msg';
+  if (!confirm('Tem certeza que deseja apagar as credenciais salvas?')) return;
+  try {
+    await api('POST', '/api/credentials/clear');
+    credentialsState = { hasCredentials: false };
+    showCredentialsForm = false;
+    renderCredentials(credentialsState);
+    msgEl.textContent = 'Credenciais apagadas!';
+  } catch (e) {
+    msgEl.className = 'error-msg';
+    msgEl.textContent = 'Erro: ' + e.message;
+  }
+}
+
+// â”€â”€â”€ Commercial Settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+let commercialState = null;
+
+async function loadCommercialSettings() {
+  try {
+    commercialState = await api('GET', '/api/commercial-settings');
+    renderCommercialSettings(commercialState);
+  } catch (e) {
+    // silent
+  }
+}
+
+function checkoutStatusTag(status) {
+  const map = {
+    missing: 'tag-pending',
+    pending_validation: 'tag-pending',
+    validated: 'tag-approved',
+    approved: 'tag-sent',
+    rejected: 'tag-cancelled'
+  };
+  return '<span class="tag ' + (map[status] || '') + '">' + status + '</span>';
+}
+
+function renderCommercialSettings(state) {
+  const container = document.getElementById('commercialContent');
+  const hasSettings = state.hasSettings;
+  const s = hasSettings ? state.settings : null;
+
+  const productName = s ? s.productName : '';
+  const price = s ? s.price : '';
+  const checkoutUrl = s ? s.checkoutUrl : '';
+  const deliveryMethod = s ? s.deliveryMethod : '';
+  const checkoutStatus = s ? s.checkoutStatus : 'missing';
+  const validation = s ? s.validation : null;
+  const approvedAt = s && s.approvedAt ? new Date(s.approvedAt).toLocaleString('pt-BR') : null;
+
+  const canValidate = hasSettings;
+  const canApprove = checkoutStatus === 'validated';
+  const canReject = checkoutStatus !== 'missing' && checkoutStatus !== 'approved';
+  const canReset = hasSettings;
+
+  let validationHtml = '';
+  if (validation) {
+    const caktoLabel = validation.isCaktoDomain ? 'Sim' : 'N\u00e3o';
+    const errorHtml = validation.error
+      ? '<div style="color:#e74c3c;font-size:0.8rem;margin-top:4px;">Erro: ' + validation.error + '</div>'
+      : '';
+    validationHtml = '' +
+      '<div style="font-size:0.8rem;color:#666;margin-top:4px;padding:6px;background:#f9f9f9;border-radius:4px;">' +
+        '<div><strong>Status HTTP:</strong> ' + (validation.statusCode || '-') + '</div>' +
+        '<div><strong>URL final:</strong> ' + (validation.finalUrl || '-') + '</div>' +
+        '<div><strong>Dom\u00ednio Cakto:</strong> ' + caktoLabel + '</div>' +
+        '<div><strong>Verificado em:</strong> ' + new Date(validation.checkedAt).toLocaleString('pt-BR') + '</div>' +
+        errorHtml +
+      '</div>';
+  }
+
+  const approvedHtml = approvedAt
+    ? '<div style="font-size:0.8rem;color:#155724;margin-top:4px;"><strong>Aprovado em:</strong> ' + approvedAt + '</div>'
+    : '';
+
+  const warningHtml = checkoutStatus === 'validated'
+    ? '<div style="margin-top:6px;padding:6px;background:#fef3cd;border-radius:4px;font-size:0.8rem;color:#856404;">' +
+        '\u26a0\ufe0f Confira visualmente nome e pre\u00e7o na p\u00e1gina antes de aprovar.' +
+      '</div>'
+    : '';
+
+  container.innerHTML = '' +
+    '<div style="margin-bottom:8px;">' +
+      '<div class="flex" style="justify-content:space-between;">' +
+        '<strong>Status do checkout:</strong>' +
+        checkoutStatusTag(checkoutStatus) +
+      '</div>' +
+    '</div>' +
+    '<div style="margin-bottom:6px;">' +
+      '<label style="font-size:0.8rem;font-weight:600;">Nome do produto</label>' +
+      '<input type="text" id="comProductName" value="' + productName.replace(/&/g, '&amp;').replace(/"/g, '"') + '" placeholder="Planner Estudante Pro" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;">' +
+    '</div>' +
+    '<div style="margin-bottom:6px;">' +
+      '<label style="font-size:0.8rem;font-weight:600;">Pre\u00e7o</label>' +
+      '<input type="text" id="comPrice" value="' + price.replace(/&/g, '&amp;').replace(/"/g, '"') + '" placeholder="R$ 27,00" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;">' +
+    '</div>' +
+    '<div style="margin-bottom:6px;">' +
+      '<label style="font-size:0.8rem;font-weight:600;">Link Cakto</label>' +
+      '<input type="text" id="comCheckoutUrl" value="' + checkoutUrl.replace(/&/g, '&amp;').replace(/"/g, '"') + '" placeholder="https://cakto.com.br/..." style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;">' +
+    '</div>' +
+    '<div style="margin-bottom:6px;">' +
+      '<label style="font-size:0.8rem;font-weight:600;">M\u00e9todo de entrega</label>' +
+      '<input type="text" id="comDeliveryMethod" value="' + deliveryMethod.replace(/&/g, '&amp;').replace(/"/g, '"') + '" placeholder="Entrega autom\u00e1tica por e-mail..." style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;">' +
+    '</div>' +
+    validationHtml +
+    approvedHtml +
+    warningHtml +
+    '<div class="flex" style="margin-top:8px;">' +
+      '<button class="btn btn-primary" onclick="handleSaveCommercial()">Salvar configura\u00e7\u00e3o</button>' +
+      '<button class="btn btn-warning" onclick="handleValidateCheckout()"' + (canValidate ? '' : ' disabled') + '>Testar checkout</button>' +
+      '<button class="btn btn-success" onclick="handleApproveCheckout()"' + (canApprove ? '' : ' disabled') + '>Aprovar checkout</button>' +
+      '<button class="btn btn-secondary" onclick="handleRejectCheckout()"' + (canReject ? '' : ' disabled') + '>Rejeitar checkout</button>' +
+      '<button class="btn btn-danger" onclick="handleResetCommercial()"' + (canReset ? '' : ' disabled') + '>Resetar</button>' +
+    '</div>' +
+    '<div id="comMsg" class="success-msg"></div>';
+}
+
+async function handleSaveCommercial() {
+  const msgEl = document.getElementById('comMsg');
+  msgEl.textContent = '';
+  msgEl.className = 'success-msg';
+  const productName = document.getElementById('comProductName').value;
+  const price = document.getElementById('comPrice').value;
+  const checkoutUrl = document.getElementById('comCheckoutUrl').value;
+  const deliveryMethod = document.getElementById('comDeliveryMethod').value;
+  try {
+    commercialState = await api('POST', '/api/commercial-settings/save', { productName, price, checkoutUrl, deliveryMethod });
+    renderCommercialSettings(commercialState);
+    msgEl.textContent = 'Configura\u00e7\u00e3o salva!';
+  } catch (e) {
+    msgEl.className = 'error-msg';
+    msgEl.textContent = 'Erro: ' + e.message;
+  }
+}
+
+async function handleValidateCheckout() {
+  const msgEl = document.getElementById('comMsg');
+  msgEl.textContent = '';
+  msgEl.className = 'success-msg';
+  const checkoutUrl = document.getElementById('comCheckoutUrl').value;
+  if (!checkoutUrl) {
+    msgEl.className = 'error-msg';
+    msgEl.textContent = 'Informe o link Cakto antes de testar.';
+    return;
+  }
+  try {
+    commercialState = await api('POST', '/api/commercial-settings/validate-checkout', { checkoutUrl });
+    renderCommercialSettings(commercialState);
+    msgEl.textContent = 'Valida\u00e7\u00e3o conclu\u00edda!';
+  } catch (e) {
+    msgEl.className = 'error-msg';
+    msgEl.textContent = 'Erro: ' + e.message;
+  }
+}
+
+async function handleApproveCheckout() {
+  const msgEl = document.getElementById('comMsg');
+  msgEl.textContent = '';
+  msgEl.className = 'success-msg';
+  if (!confirm('Confira visualmente nome e pre\u00e7o na p\u00e1gina antes de aprovar. Deseja aprovar o checkout?')) return;
+  try {
+    commercialState = await api('POST', '/api/commercial-settings/approve');
+    renderCommercialSettings(commercialState);
+    msgEl.textContent = 'Checkout aprovado!';
+  } catch (e) {
+    msgEl.className = 'error-msg';
+    msgEl.textContent = 'Erro: ' + e.message;
+  }
+}
+
+async function handleRejectCheckout() {
+  const msgEl = document.getElementById('comMsg');
+  msgEl.textContent = '';
+  msgEl.className = 'success-msg';
+  try {
+    commercialState = await api('POST', '/api/commercial-settings/reject');
+    renderCommercialSettings(commercialState);
+    msgEl.textContent = 'Checkout rejeitado!';
+  } catch (e) {
+    msgEl.className = 'error-msg';
+    msgEl.textContent = 'Erro: ' + e.message;
+  }
+}
+
+async function handleResetCommercial() {
+  const msgEl = document.getElementById('comMsg');
+  msgEl.textContent = '';
+  msgEl.className = 'success-msg';
+  if (!confirm('Tem certeza que deseja resetar a configura\u00e7\u00e3o comercial?')) return;
+  try {
+    await api('POST', '/api/commercial-settings/reset');
+    commercialState = { hasSettings: false };
+    renderCommercialSettings(commercialState);
+    msgEl.textContent = 'Configura\u00e7\u00e3o resetada!';
+  } catch (e) {
+    msgEl.className = 'error-msg';
+    msgEl.textContent = 'Erro: ' + e.message;
+  }
+}
+
+// Initial load
+loadReviews();
+loadStats();
+loadRuntime();
+loadCredentials();
+loadCommercialSettings();
+</script>

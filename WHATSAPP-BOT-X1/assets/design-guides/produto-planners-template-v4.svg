@@ -1,0 +1,181 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350">
+  <defs>
+    <filter id="card-shadow" x="-4%" y="-4%" width="108%" height="112%">
+      <feDropShadow dx="0" dy="2" stdDeviation="6" flood-color="#000000" flood-opacity="0.08"/>
+    </filter>
+    <filter id="bonus-shadow" x="-6%" y="-6%" width="112%" height="112%">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#2563EB" flood-opacity="0.12"/>
+    </filter>
+    <filter id="selo-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="1" stdDeviation="3" flood-color="#2563EB" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <!-- Fundo -->
+  <rect width="1080" height="1350" fill="#F8FAFC"/>
+
+  <!-- ===== HEADER ===== -->
+  <!-- Selo PDF DIGITAL -->
+  <rect x="888" y="56" width="136" height="32" rx="16" fill="#2563EB" filter="url(#selo-shadow)"/>
+  <text x="956" y="77" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="700" fill="#FFFFFF" letter-spacing="1.5">
+    PDF DIGITAL
+  </text>
+
+  <!-- Título -->
+  <text x="56" y="110" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="60" font-weight="700" fill="#111827" letter-spacing="-0.5">
+    Planner Estudante Pro
+  </text>
+
+  <!-- Subtítulo -->
+  <text x="56" y="158" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="30" font-weight="400" fill="#6B7280" letter-spacing="0.2">
+    10 planners digitais em PDF
+  </text>
+
+  <!-- Linha decorativa sutil -->
+  <line x1="56" y1="180" x2="1024" y2="180" stroke="#E5E7EB" stroke-width="1"/>
+
+  <!-- ===== GRID 5x2 ===== -->
+  <!-- Cards: 195x276 (A4), gap 8px horizontal, 16px vertical -->
+  <!-- 5*195 + 4*8 = 1007, offset x = (1080-1007)/2 = 36.5 → x=37 -->
+
+  <!-- Linha 1 -->
+  <!-- Card 1 - Cyber Focus -->
+  <g transform="translate(37, 200)">
+    <rect width="195" height="276" rx="14" fill="#FFFFFF" filter="url(#card-shadow)"/>
+    <rect x="8" y="8" width="179" height="236" rx="10" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1.5" stroke-dasharray="6,4"/>
+    <text x="97" y="132" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#94A3B8">placeholder</text>
+    <text x="97" y="150" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#94A3B8">capa aqui</text>
+    <text x="97" y="264" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="13" font-weight="600" fill="#374151">Cyber Focus</text>
+  </g>
+
+  <!-- Card 2 - Candy Dream -->
+  <g transform="translate(240, 200)">
+    <rect width="195" height="276" rx="14" fill="#FFFFFF" filter="url(#card-shadow)"/>
+    <rect x="8" y="8" width="179" height="236" rx="10" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1.5" stroke-dasharray="6,4"/>
+    <text x="97" y="132" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#94A3B8">placeholder</text>
+    <text x="97" y="150" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#94A3B8">capa aqui</text>
+    <text x="97" y="264" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="13" font-weight="600" fill="#374151">Candy Dream</text>
+  </g>
+
+  <!-- Card 3 - Deep Tech -->
+  <g transform="translate(443, 200)">
+    <rect width="195" height="276" rx="14" fill="#FFFFFF" filter="url(#card-shadow)"/>
+    <rect x="8" y="8" width="179" height="236" rx="10" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1.5" stroke-dasharray="6,4"/>
+    <text x="97" y="132" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#94A3B8">placeholder</text>
+    <text x="97" y="150" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#94A3B8">capa aqui</text>
+    <text x="97" y="264" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="13" font-weight="600" fill="#374151">Deep Tech</text>
+  </g>
+
+  <!-- Card 4 - Lavender -->
+  <g transform="translate(646, 200)">
+    <rect width="195" height="276" rx="14" fill="#FFFFFF" filter="url(#card-shadow)"/>
+    <rect x="8" y="8" width="179" height="236" rx="10" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1.5" stroke-dasharray="6,4"/>
+    <text x="97" y="132" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#94A3B8">placeholder</text>
+    <text x="97" y="150" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#94A3B8">capa aqui</text>
+    <text x="97" y="264" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="13" font-weight="600" fill="#374151">Lavender</text>
+  </g>
+
+  <!-- Card 5 - Focus Grid -->
+  <g transform="translate(849, 200)">
+    <rect width="195" height="276" rx="14" fill="#FFFFFF" filter="url(#card-shadow)"/>
+    <rect x="8" y="8" width="179" height="236" rx="10" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1.5" stroke-dasharray="6,4"/>
+    <text x="97" y="132" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#94A3B8">placeholder</text>
+    <text x="97" y="150" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#94A3B8">capa aqui</text>
+    <text x="97" y="264" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="13" font-weight="600" fill="#374151">Focus Grid</text>
+  </g>
+
+  <!-- Linha 2 -->
+  <!-- Card 6 - Graffiti Art -->
+  <g transform="translate(37, 492)">
+    <rect width="195" height="276" rx="14" fill="#FFFFFF" filter="url(#card-shadow)"/>
+    <rect x="8" y="8" width="179" height="236" rx="10" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1.5" stroke-dasharray="6,4"/>
+    <text x="97" y="132" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#94A3B8">placeholder</text>
+    <text x="97" y="150" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#94A3B8">capa aqui</text>
+    <text x="97" y="264" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="13" font-weight="600" fill="#374151">Graffiti Art</text>
+  </g>
+
+  <!-- Card 7 - Green Balance -->
+  <g transform="translate(240, 492)">
+    <rect width="195" height="276" rx="14" fill="#FFFFFF" filter="url(#card-shadow)"/>
+    <rect x="8" y="8" width="179" height="236" rx="10" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1.5" stroke-dasharray="6,4"/>
+    <text x="97" y="132" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#94A3B8">placeholder</text>
+    <text x="97" y="150" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#94A3B8">capa aqui</text>
+    <text x="97" y="264" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="13" font-weight="600" fill="#374151">Green Balance</text>
+  </g>
+
+  <!-- Card 8 - Earth Tone -->
+  <g transform="translate(443, 492)">
+    <rect width="195" height="276" rx="14" fill="#FFFFFF" filter="url(#card-shadow)"/>
+    <rect x="8" y="8" width="179" height="236" rx="10" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1.5" stroke-dasharray="6,4"/>
+    <text x="97" y="132" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#94A3B8">placeholder</text>
+    <text x="97" y="150" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#94A3B8">capa aqui</text>
+    <text x="97" y="264" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="13" font-weight="600" fill="#374151">Earth Tone</text>
+  </g>
+
+  <!-- Card 9 - Black Gold -->
+  <g transform="translate(646, 492)">
+    <rect width="195" height="276" rx="14" fill="#FFFFFF" filter="url(#card-shadow)"/>
+    <rect x="8" y="8" width="179" height="236" rx="10" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1.5" stroke-dasharray="6,4"/>
+    <text x="97" y="132" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#94A3B8">placeholder</text>
+    <text x="97" y="150" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#94A3B8">capa aqui</text>
+    <text x="97" y="264" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="13" font-weight="600" fill="#374151">Black Gold</text>
+  </g>
+
+  <!-- Card 10 - Neo Zebra -->
+  <g transform="translate(849, 492)">
+    <rect width="195" height="276" rx="14" fill="#FFFFFF" filter="url(#card-shadow)"/>
+    <rect x="8" y="8" width="179" height="236" rx="10" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1.5" stroke-dasharray="6,4"/>
+    <text x="97" y="132" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#94A3B8">placeholder</text>
+    <text x="97" y="150" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#94A3B8">capa aqui</text>
+    <text x="97" y="264" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="13" font-weight="600" fill="#374151">Neo Zebra</text>
+  </g>
+
+  <!-- ===== ÁREA DE BÔNUS ===== -->
+  <!-- Linha divisória sutil -->
+  <line x1="56" y1="800" x2="1024" y2="800" stroke="#E5E7EB" stroke-width="1"/>
+
+  <!-- Texto principal -->
+  <text x="540" y="840" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="32" font-weight="700" fill="#2563EB" letter-spacing="-0.3">
+    + 3 ebooks bônus inclusos
+  </text>
+
+  <!-- 3 placeholders de ebook lado a lado -->
+  <!-- Cards: 215x304 (A4), gap 18px horizontal -->
+  <!-- 3*215 + 2*18 = 681, offset x = (1080-681)/2 = 199.5 → x=200 -->
+
+  <!-- Ebook 1 - Organização Escolar -->
+  <g transform="translate(200, 870)">
+    <rect width="215" height="304" rx="12" fill="#FFFFFF" filter="url(#bonus-shadow)"/>
+    <rect x="8" y="8" width="199" height="264" rx="8" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1.5" stroke-dasharray="6,4"/>
+    <text x="107" y="146" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="11" fill="#94A3B8">placeholder</text>
+    <text x="107" y="162" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="11" fill="#94A3B8">capa aqui</text>
+    <!-- Nome -->
+    <text x="107" y="1195" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="13" font-weight="700" fill="#374151">Organização Escolar</text>
+    <!-- Chamada -->
+    <text x="107" y="1215" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="11" font-weight="400" fill="#6B7280">Rotina, tarefas e revisão semanal</text>
+  </g>
+
+  <!-- Ebook 2 - Estudos e Provas -->
+  <g transform="translate(433, 870)">
+    <rect width="215" height="304" rx="12" fill="#FFFFFF" filter="url(#bonus-shadow)"/>
+    <rect x="8" y="8" width="199" height="264" rx="8" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1.5" stroke-dasharray="6,4"/>
+    <text x="107" y="146" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="11" fill="#94A3B8">placeholder</text>
+    <text x="107" y="162" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="11" fill="#94A3B8">capa aqui</text>
+    <!-- Nome -->
+    <text x="107" y="1195" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="13" font-weight="700" fill="#374151">Estudos e Provas</text>
+    <!-- Chamada -->
+    <text x="107" y="1215" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="11" font-weight="400" fill="#6B7280">Método ativo, simulados e redação ENEM</text>
+  </g>
+
+  <!-- Ebook 3 - Projetos e Futuro -->
+  <g transform="translate(666, 870)">
+    <rect width="215" height="304" rx="12" fill="#FFFFFF" filter="url(#bonus-shadow)"/>
+    <rect x="8" y="8" width="199" height="264" rx="8" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1.5" stroke-dasharray="6,4"/>
+    <text x="107" y="146" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="11" fill="#94A3B8">placeholder</text>
+    <text x="107" y="162" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="11" fill="#94A3B8">capa aqui</text>
+    <!-- Nome -->
+    <text x="107" y="1195" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="13" font-weight="700" fill="#374151">Projetos e Futuro</text>
+    <!-- Chamada -->
+    <text x="107" y="1215" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="11" font-weight="400" fill="#6B7280">Metas, plano de ação e próximos passos</text>
+  </g>
+</svg>

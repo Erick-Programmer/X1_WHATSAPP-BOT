@@ -1,0 +1,106 @@
+# WHATSAPP-BOT-X1 — Regras de Operação
+
+## 1. Escopo
+
+- Trabalhar somente dentro da pasta `WHATSAPP-BOT-X1`.
+- Não acessar, ler, editar ou mover arquivos de `X1 - PLANO 2`, exceto quando o usuário pedir explicitamente leitura/conversão de previews.
+- Nunca alterar planners, ebooks, PDFs finais ou backlog do produto principal.
+
+## 2. Dependências
+
+- Não instalar dependências globalmente sem aprovação explícita.
+- Não rodar `pip install` global.
+- Não rodar `npm install`, `pnpm install` ou `yarn install` sem aprovação.
+- Não criar `node_modules`, lockfiles ou venv durante planejamento.
+- Se precisar de biblioteca Python, pedir autorização e preferir venv local.
+- Se precisar de pacote Node, pedir autorização e instalar apenas dentro do projeto.
+
+## 3. WhatsApp
+
+- Não integrar WhatsApp real sem aprovação.
+- Não colocar tokens reais no código.
+- Não enviar mensagens reais.
+- Usar apenas `.env.example` até a etapa de integração.
+- `whatsappClient.ts` deve permanecer mockado enquanto não houver autorização explícita.
+
+## 4. IA e Atendimento
+
+- Respostas devem ser curtas, humanas e focadas na venda.
+- Não inventar preço, desconto, link, garantia ou resultado.
+- Não prometer aprovação, nota alta ou resultado garantido.
+- Se a pergunta envolver reembolso, problema de pagamento, reclamação ou tema sensível, marcar como humano necessário.
+- Se a pessoa sair do contexto, responder brevemente e voltar para o Planner Estudante Pro.
+
+## 5. Fluxo Comercial
+
+- Se a pessoa responder "sim", "claro", "pode", "manda", "quero ver" ou equivalente, classificar como confirmação positiva.
+- Após confirmação positiva:
+  1. enviar mensagem curta,
+  2. enviar imagem dos planners,
+  3. enviar mensagem curta,
+  4. enviar imagem dos ebooks bônus,
+  5. perguntar se quer valor e forma de acesso.
+- Usar PNG estático primeiro.
+- GIFs ou previews animados só devem ser enviados se a pessoa pedir para ver por dentro.
+
+## 6. Assets
+
+- `assets/produto-planners.png` será a imagem comercial principal dos 10 planners.
+- `assets/ebooks-bonus.png` será a imagem comercial dos 3 ebooks.
+- `assets/preview-source/` contém materiais auxiliares para Photoshop.
+- Não sobrescrever assets finais sem aprovação.
+
+## 7. Processos
+
+- Não rodar servidores em background.
+- Não usar `start /B`.
+- Não iniciar processos persistentes sem PID conhecido.
+- Se rodar qualquer comando que gere processo, reportar e encerrar ao final.
+
+## 8. Relatórios
+
+Ao final de cada tarefa, reportar:
+- arquivos criados,
+- arquivos alterados,
+- dependências instaladas, se houver,
+- comandos executados,
+- próximos passos.
+
+## 9. Economia de Tokens e Trabalho Focado
+
+- Antes de ler muitos arquivos, identificar exatamente quais arquivos são necessários para a tarefa.
+- Não fazer varredura ampla do projeto sem necessidade.
+- Não reler arquivos que já foram lidos na mesma tarefa, a menos que tenham sido alterados.
+- Não abrir PDFs, imagens, node_modules, dist, build, out, logs ou arquivos grandes sem necessidade explícita.
+- Não ler `X1 - PLANO 2` salvo quando o usuário pedir leitura/conversão específica.
+- Preferir leitura seletiva de trechos pequenos em vez de arquivo inteiro quando possível.
+- Para perguntas sobre código, usar busca objetiva por nomes de funções, arquivos ou strings.
+- Não gerar planos longos quando a tarefa for pequena e operacional.
+- Não repetir relatórios extensos se nada mudou.
+- Em tarefas simples, responder com resumo curto: arquivos alterados, comandos executados e status.
+- Não executar build, testes, instalação ou geração de assets sem necessidade explícita.
+- Se precisar validar algo, escolher a validação mais barata e direta primeiro.
+
+## 10. Modo de Investigação Eficiente
+
+- Trabalhar como revisor focado: hipótese -> arquivo relevante -> confirmação -> ação.
+- Evitar exploração panorâmica.
+- Primeiro usar busca textual para localizar o ponto exato.
+- Depois ler apenas o trecho necessário.
+- Só expandir a investigação se houver erro, ambiguidade ou risco real.
+- Separar tarefas:
+  - Planejamento: não editar, não instalar, não rodar builds.
+  - Implementação: editar apenas os arquivos necessários.
+  - Validação: rodar apenas o comando combinado.
+- Se uma tarefa pode ser resolvida por regra/template, não chamar IA generativa desnecessariamente.
+
+## 11. Economia de Tokens no Bot
+
+- O bot não deve enviar toda a base de conhecimento para o modelo em toda mensagem.
+- Usar respostas por template sempre que a intenção for clara.
+- Usar IA generativa apenas para dúvidas livres ou fora dos templates.
+- Usar QA automático apenas em respostas geradas por IA, não em templates simples.
+- Para mensagens como "sim", "claro", "quanto custa", "como recebo", usar fluxo fixo.
+- Manter contexto curto: últimas 3 a 5 mensagens, intenção atual e etapa do funil.
+- Nunca incluir PDFs, textos completos dos planners ou ebooks no prompt.
+- A base do produto deve ser resumida em no máximo 1 página de conhecimento comercial.

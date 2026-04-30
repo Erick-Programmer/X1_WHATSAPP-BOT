@@ -1,0 +1,44 @@
+{
+  "entry": {
+    "text": "Olá! Tudo bem? Aqui é da equipe Planner Estudante Pro. Vi que você tem interesse em organizar melhor seus estudos. Posso te mostrar como funciona?"
+  },
+  "positive_confirmation": {
+    "text": "Que bom! Vou te mostrar o que vem no pacote."
+  },
+  "product_main": {
+    "text": "Este é o Planner Estudante Pro. São 10 planners completos para organizar seus estudos do planejamento mensal até o acompanhamento de simulados. Tudo em PDF, pronto para imprimir ou usar no tablet/celular."
+  },
+  "bonus_ebooks": {
+    "text": "E ainda leva estes 3 ebooks bônus com técnicas de estudo, organização escolar e foco. Um pacote completo para turbinar sua rotina de estudos."
+  },
+  "ask_price": {
+    "text": "Vou te passar o valor e as formas de acesso em seguida. Só um instante."
+  },
+  "delivery_info": {
+    "text": "A entrega é digital, em PDF. Você recebe o material por e-mail ou WhatsApp assim que a confirmação for feita. Pode imprimir ou usar no tablet, celular ou computador."
+  },
+  "target_audience": {
+    "text": "O Planner Estudante Pro é ideal para estudantes do Ensino Fundamental II, Ensino Médio e quem está se preparando para ENEM ou vestibular. Também atende pais que querem ajudar os filhos na organização escolar."
+  },
+  "objection_think": {
+    "text": "Entendo, sem pressa. Se quiser, posso te mostrar mais detalhes do conteúdo para ajudar na sua decisão. O que acha?"
+  },
+  "objection_expensive": {
+    "text": "Entendo seu ponto. O Planner Estudante Pro é um investimento em organização que acompanha o ano todo, com 10 planners e 3 ebooks. Muitos estudantes sentem diferença na rotina depois que começam a usar."
+  },
+  "closing": {
+    "text": "Ficou interessado? Me avise que eu passo as informações de valor e acesso para você."
+  },
+  "stop_contact": {
+    "text": "Sem problemas. Se mudar de ideia ou quiser saber mais depois, é só me chamar. Tenha um ótimo dia!"
+  },
+  "fallback": {
+    "text": "Entendi! Sobre o Planner Estudante Pro, ele pode te ajudar a organizar seus estudos. Quer conhecer melhor?"
+  },
+  "human_needed": {
+    "text": "Entendi. Vou transferir seu atendimento para um de nossos atendentes. Em breve alguém fala com você."
+  },
+  "unknown": {
+    "text": "Obrigado pela mensagem! Se tiver dúvidas sobre o Planner Estudante Pro, pode perguntar. É um pacote digital com 10 planners e 3 ebooks para organizar seus estudos."
+  }
+}
