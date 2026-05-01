@@ -91,6 +91,28 @@ class ReviewQueue {
   }
 
   /**
+   * Update metadata fields after an imported review is created.
+   * Used by local panel/import endpoints to persist contact info.
+   */
+  updateReviewMetadata(
+    reviewId: string,
+    metadata: Pick<ReviewItem, "contactName" | "contactPhone" | "source" | "receivedAt">
+  ): ReviewItem {
+    const item = this.items.get(reviewId);
+    if (!item) {
+      throw new Error(`Review item ${reviewId} not found`);
+    }
+
+    item.contactName = metadata.contactName;
+    item.contactPhone = metadata.contactPhone;
+    item.source = metadata.source;
+    item.receivedAt = metadata.receivedAt;
+    item.updatedAt = new Date();
+    this.persist();
+    return item;
+  }
+
+  /**
    * Approve a suggestion for a review item.
    * Sets status to "approved" and records the chosen suggestion id.
    * Throws if item is cancelled or expired.

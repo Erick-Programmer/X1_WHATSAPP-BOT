@@ -176,7 +176,13 @@ input[type="text"] { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4p
 .admin-panel .card-inner { font-size: 0.85rem; }
 .admin-panel .card-inner label { font-size: 0.78rem; font-weight: 600; display: block; margin-bottom: 3px; color: #0f3460; }
 .admin-panel .card-inner input { width: 100%; padding: 5px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.82rem; margin-bottom: 5px; }
+.admin-panel .card-inner textarea { width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.82rem; min-height: 120px; resize: vertical; margin-bottom: 5px; }
 .admin-panel .card-inner .flex { margin-top: 4px; }
+.lead-summary { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; font-size: 0.78rem; color: #555; }
+.lead-chip { background: #eef2ff; color: #0f3460; padding: 3px 7px; border-radius: 12px; font-weight: 600; }
+.lead-list-preview { max-height: 150px; overflow-y: auto; border: 1px solid #eee; border-radius: 4px; padding: 6px; font-size: 0.78rem; background: #fafafa; }
+.lead-list-preview div { padding: 2px 0; border-bottom: 1px solid #f1f1f1; }
+.lead-list-preview div:last-child { border-bottom: none; }
 </style>
 </head>
 <body>
@@ -199,6 +205,7 @@ input[type="text"] { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4p
     <button class="ab-btn" data-panel="credsPanel" onclick="toggleAdminPanel('credsPanel')">🔑 Credenciais</button>
     <button class="ab-btn" data-panel="commercialPanel" onclick="toggleAdminPanel('commercialPanel')">🏪 Comercial</button>
     <button class="ab-btn" data-panel="importPanel" onclick="toggleAdminPanel('importPanel')">📥 Importar</button>
+    <button class="ab-btn" data-panel="leadsPanel" onclick="toggleAdminPanel('leadsPanel')">📇 Leads</button>
     <button class="ab-btn" data-panel="testPanel" onclick="toggleAdminPanel('testPanel')">🧪 Testes</button>
     <button class="ab-btn" data-panel="metricsPanel" onclick="toggleAdminPanel('metricsPanel')">📊 Métricas</button>
   </div>
@@ -227,6 +234,22 @@ input[type="text"] { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4p
       <div style="margin-bottom:5px;"><label>Última mensagem</label><input type="text" id="importMessage" placeholder="quanto custa?"></div>
       <div class="flex"><button class="btn btn-primary" onclick="importManualMessage()">Criar atendimento</button></div>
       <div id="importError" class="error-msg"></div>
+    </div>
+  </div>
+
+  <div class="admin-panel" id="leadsPanel">
+    <div class="card-inner">
+      <div style="margin-bottom:6px;font-size:0.82rem;color:#666;">
+        Cole uma coluna de telefones, CSV ou linhas copiadas da planilha. Nome nao e necessario.
+      </div>
+      <label>Números / lista de leads</label>
+      <textarea id="leadImportText" placeholder="+5591982513119&#10;+5591985398135&#10;5591999999999"></textarea>
+      <div class="flex">
+        <button class="btn btn-primary" onclick="importLeads()">Importar leads</button>
+        <button class="btn btn-secondary" onclick="loadLeads()">Atualizar lista</button>
+      </div>
+      <div id="leadImportMsg" class="success-msg"></div>
+      <div id="leadsContent"></div>
     </div>
   </div>
 
@@ -279,6 +302,7 @@ let credentialsState = null;
 let showCredentialsForm = false;
 let commercialState = null;
 let showCommercialForm = false;
+let leadsState = { total: 0, leads: [] };
 
 function toggleAdminPanel(panelId) {
   const panel = document.getElementById(panelId);

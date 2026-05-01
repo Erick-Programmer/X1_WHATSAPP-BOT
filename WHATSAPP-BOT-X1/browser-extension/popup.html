@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Copiloto WhatsApp</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      width: 340px;
+      padding: 16px;
+      background: #f5f5f5;
+      color: #1a1a1a;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #075e54;
+      text-align: center;
+    }
+
+    .subtitle {
+      font-size: 12px;
+      color: #666;
+      text-align: center;
+      margin-bottom: 4px;
+    }
+
+    button {
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-capture {
+      background: #075e54;
+      color: #fff;
+    }
+
+    .btn-capture:hover:not(:disabled) {
+      background: #054d44;
+    }
+
+    .btn-list {
+      background: #128c7e;
+      color: #fff;
+    }
+
+    .btn-list:hover:not(:disabled) {
+      background: #0e7367;
+    }
+
+    .btn-diagnose {
+      background: #6c757d;
+      color: #fff;
+    }
+
+    .btn-diagnose:hover:not(:disabled) {
+      background: #5a6268;
+    }
+
+    .btn-import {
+      background: #28a745;
+      color: #fff;
+      flex: 1;
+    }
+
+    .btn-import:hover:not(:disabled) {
+      background: #218838;
+    }
+
+    .btn-cancel {
+      background: #dc3545;
+      color: #fff;
+    }
+
+    .btn-cancel:hover:not(:disabled) {
+      background: #c82333;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-row button {
+      flex: 1;
+    }
+
+    .status {
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1.4;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+
+    .status.idle {
+      background: #e8e8e8;
+      color: #666;
+    }
+
+    .status.loading {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .status.success {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .status.error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .preview {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 12px;
+      display: none;
+    }
+
+    .preview.visible {
+      display: block;
+    }
+
+    .preview label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #555;
+      display: block;
+      margin-top: 8px;
+    }
+
+    .preview label:first-child {
+      margin-top: 0;
+    }
+
+    .preview .value {
+      font-size: 13px;
+      color: #1a1a1a;
+      margin: 2px 0 0 4px;
+      word-break: break-word;
+    }
+
+    .preview input {
+      width: 100%;
+      padding: 6px 8px;
+      font-size: 13px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      margin-top: 2px;
+    }
+
+    .preview input:focus {
+      outline: none;
+      border-color: #075e54;
+    }
+
+    .preview .warning {
+      font-size: 11px;
+      color: #856404;
+      background: #fff3cd;
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin-top: 4px;
+    }
+
+    .preview .success-msg {
+      font-size: 13px;
+      color: #155724;
+      background: #d4edda;
+      padding: 8px 12px;
+      border-radius: 4px;
+      text-align: center;
+    }
+
+    .footer {
+      font-size: 11px;
+      color: #999;
+      text-align: center;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Copiloto WhatsApp</h1>
+    <p class="subtitle">Captura dados de conversas</p>
+
+    <!-- Tela 1: Botões de captura -->
+    <div id="screenCapture" class="btn-row">
+      <button id="btnCapture" class="btn-capture">
+        📥 Capturar
+      </button>
+      <button id="btnList" class="btn-list">
+        📋 Capturar da lista
+      </button>
+    </div>
+    <div id="screenCapture2" class="btn-row">
+      <button id="btnDiagnose" class="btn-diagnose">
+        🔍 Diagnosticar
+      </button>
+    </div>
+
+    <!-- Tela 2: Preview + confirmação -->
+    <div id="screenPreview" class="preview" style="display:none">
+      <label>Contato</label>
+      <div class="value" id="previewName">—</div>
+
+      <label>Última mensagem</label>
+      <div class="value" id="previewMessage">—</div>
+
+      <label>Horário</label>
+      <div class="value" id="previewTime">—</div>
+
+      <label>Telefone / WhatsApp do cliente</label>
+      <input type="text" id="inputPhone" placeholder="Ex: 5511999999999" />
+      <div class="warning" id="phoneWarning" style="display:none">
+        ⚠️ Sem telefone, o painel não consegue abrir wa.me automaticamente.
+      </div>
+
+      <div class="btn-row" style="margin-top:10px">
+        <button id="btnImport" class="btn-import">✅ Importar para painel</button>
+        <button id="btnCancel" class="btn-cancel">✕ Cancelar</button>
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div id="status" class="status idle">
+      Pronto. Abra uma conversa no WhatsApp Web e clique em "Capturar".
+    </div>
+
+    <p class="footer">
+      Apenas leitura · Nenhuma mensagem é enviada pelo WhatsApp
+    </p>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

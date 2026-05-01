@@ -8,6 +8,7 @@ import { botRuntime } from "../../services/botRuntimeState";
 import { whatsappCredentials } from "../../services/whatsappCredentials";
 import { commercialSettings } from "../../services/commercialSettings";
 import { commercialConfig } from "../../config/commercial";
+import { leadStore, normalizePhone, looksLikePhone } from "../../services/leadStore";
 
 const PORT = parseInt(process.env.COPILOT_PANEL_PORT || "8787", 10);
 const HOST = "127.0.0.1";
@@ -97,6 +98,26 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       return;
     }
 
+    // GET /api/leads
+    if (method === "GET" && url === "/api/leads") {
+      const leads = leadStore.list();
+      jsonResponse(res, 200, { total: leads.length, leads });
+      return;
+    }
+
+    // POST /api/leads/import
+    if (method === "POST" && url === "/api/leads/import") {
+      const body = await parseBody(req);
+      const rawText = (body.rawText as string || "").trim();
+      if (!rawText) {
+        jsonResponse(res, 400, { error: "rawText e obrigatorio" });
+        return;
+      }
+
+      jsonResponse(res, 200, leadStore.importFromText(rawText));
+      return;
+    }
+
     // POST /api/inbox/import
     if (method === "POST" && url === "/api/inbox/import") {
       const body = await parseBody(req);
@@ -111,8 +132,13 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const rawContactPhone = (body.contactPhone as string) || "";
       const receivedAt = (body.receivedAt as string) || new Date().toISOString();
 
-      // Limpar telefone: só dígitos
-      const contactPhone = rawContactPhone.replace(/\D/g, "");
+      // Limpar telefone: só dígitos. Se o WhatsApp Web mostrar o número
+      // como "nome" da conversa, também usamos esse texto como telefone.
+      let contactPhone = normalizePhone(rawContactPhone);
+      if (!looksLikePhone(contactPhone) && looksLikePhone(rawContactName)) {
+        contactPhone = normalizePhone(rawContactName);
+      }
+      const importedLead = contactPhone ? leadStore.findByPhone(contactPhone) : null;
 
       // Gerar contactId
       let contactId: string;
@@ -137,11 +163,12 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         suggestions
       );
 
-      // Salvar campos extras
-      item.contactName = rawContactName || undefined;
-      item.contactPhone = contactPhone || undefined;
-      item.source = source as "manual" | "whatsapp_web_extension" | "api" | "mock";
-      item.receivedAt = receivedAt;
+      reviewQueue.updateReviewMetadata(item.id, {
+        contactName: importedLead ? undefined : rawContactName || undefined,
+        contactPhone: contactPhone || importedLead?.phone || undefined,
+        source: source as "manual" | "whatsapp_web_extension" | "api" | "mock",
+        receivedAt,
+      });
 
       jsonResponse(res, 201, {
         reviewId: item.id,
