@@ -4,6 +4,174 @@ import { commercialConfig } from "../config/commercial";
 import { validateResponse } from "./qaValidator";
 import messages from "../templates/messages.json";
 
+function pickByRound(round: number, options: string[]): string {
+  return options[(Math.max(round, 3) - 3) % options.length];
+}
+
+function buildExtendedSuggestion(
+  intent: Intent,
+  type: SuggestionType,
+  round: number,
+  price: string,
+  hasCheckout: boolean,
+  platform: string
+): string {
+  switch (intent) {
+    case Intent.AskPrice:
+      if (type === "direct") {
+        return pickByRound(round, [
+          `Fica ${price} o pacote completo. Quer que eu te mande o acesso?`,
+          `O pacote está ${price}. Posso te passar o próximo passo?`,
+          `Sai por ${price}, com os 10 planners e os 3 ebooks juntos.`,
+        ]);
+      }
+      if (type === "explanatory") {
+        return pickByRound(round, [
+          `O valor é ${price} pelo Planner Estudante Pro completo: 10 planners digitais e 3 ebooks bônus em PDF.`,
+          `Por ${price}, você recebe o pacote completo em PDF para organizar rotina, estudos, tarefas e provas.`,
+          `O investimento é ${price}. É um pacote digital com planners e ebooks para ajudar na organização dos estudos.`,
+        ]);
+      }
+      return pickByRound(round, [
+        `Isso, o pacote completo fica ${price}. Se quiser, eu te mostro rapidinho como acessar.`,
+        `Fica ${price}. Vem tudo junto: planners, ebooks e os arquivos em PDF.`,
+        `O valor é ${price}. É bem direto: comprou, recebe o acesso aos arquivos digitais.`,
+      ]);
+
+    case Intent.BuyIntent:
+      if (type === "direct") {
+        return hasCheckout
+          ? pickByRound(round, [
+              `Fechado. Posso te mandar o link do ${platform} para finalizar por ${price}.`,
+              `Perfeito. O pagamento é pelo ${platform} e fica ${price}. Quer que eu envie o link?`,
+              `Pode sim. O pacote sai por ${price}; te passo o link de pagamento.`,
+            ])
+          : pickByRound(round, [
+              `Fechado. O valor é ${price}; eu te passo as informações para acessar.`,
+              `Pode sim. O pacote sai por ${price}; já te explico o próximo passo.`,
+              `Perfeito. Fica ${price}; vou te passar como finalizar.`,
+            ]);
+      }
+      if (type === "explanatory") {
+        return pickByRound(round, [
+          `Para finalizar, o pacote fica ${price}. Depois da compra, você recebe o acesso por e-mail com os arquivos digitais.`,
+          `A compra é simples: o valor é ${price} e o material é entregue digitalmente em PDF.`,
+          `Você finaliza a compra por ${price} e recebe o link de acesso aos planners e ebooks no e-mail.`,
+        ]);
+      }
+      return pickByRound(round, [
+        `Bora. O pacote completo fica ${price}; eu te mando o caminho para finalizar.`,
+        `Show, dá para finalizar agora. O valor é ${price} e o acesso chega por e-mail.`,
+        `Combinado. Fica ${price}; te passo o link certinho para concluir.`,
+      ]);
+
+    case Intent.PositiveConfirmation:
+      if (type === "direct") {
+        return pickByRound(round, [
+          `Perfeito, vou te mostrar o pacote completo.`,
+          `Claro. Vou te mandar uma visão geral do que vem.`,
+          `Sim, vou te apresentar os planners e os bônus.`,
+        ]);
+      }
+      if (type === "explanatory") {
+        return pickByRound(round, [
+          `O Planner Estudante Pro reúne 10 planners digitais em PDF e 3 ebooks bônus para organizar estudos, tarefas e metas.`,
+          `Ele foi pensado para rotina de estudante: planejamento, tarefas, revisão, provas e acompanhamento dos estudos.`,
+          `Vou te mostrar a imagem geral do produto para você ver os 10 planners e os 3 ebooks bônus juntos.`,
+        ]);
+      }
+      return pickByRound(round, [
+        `Boa! Vou te mostrar de um jeito simples o que vem no pacote.`,
+        `Fechado, vou te mandar a visão geral pra você entender rapidinho.`,
+        `Ótimo, vou te mostrar o conteúdo principal e os bônus.`,
+      ]);
+
+    case Intent.AskDelivery:
+      if (type === "direct") {
+        return pickByRound(round, [
+          `É digital em PDF. Depois da compra, você recebe o acesso por e-mail.`,
+          `Você recebe por e-mail o link de acesso aos arquivos digitais.`,
+          `É tudo online: os arquivos ficam disponíveis por link depois da compra.`,
+        ]);
+      }
+      if (type === "explanatory") {
+        return pickByRound(round, [
+          `Os planners e ebooks são em PDF. Você pode usar no celular, tablet, computador ou imprimir.`,
+          `A entrega é digital: após a compra, chega no e-mail o link para acessar os arquivos.`,
+          `Você não recebe produto físico; é um pacote digital em PDF para baixar e usar.`,
+        ]);
+      }
+      return pickByRound(round, [
+        `É digital mesmo. Comprou, recebe o acesso no e-mail e usa como preferir.`,
+        `Vem por link no e-mail, tudo em PDF.`,
+        `Dá para usar digital ou imprimir, porque os arquivos são em PDF.`,
+      ]);
+
+    case Intent.AskContent:
+      if (type === "direct") {
+        return pickByRound(round, [
+          `Vêm 10 planners digitais e 3 ebooks bônus.`,
+          `O pacote tem planners de organização, estudo, tarefas, provas e metas.`,
+          `Inclui os 10 planners em PDF mais os 3 guias bônus.`,
+        ]);
+      }
+      if (type === "explanatory") {
+        return pickByRound(round, [
+          `O conteúdo cobre organização escolar, rotina, tarefas, estudos, provas, projetos e metas.`,
+          `Além dos 10 planners, os ebooks ajudam com organização, estudo ativo e planejamento de futuro.`,
+          `A ideia é dar ferramentas práticas para o estudante organizar a semana, revisar e acompanhar tarefas.`,
+        ]);
+      }
+      return pickByRound(round, [
+        `Vem bem completo: planners para usar no dia a dia e ebooks para orientar melhor a rotina.`,
+        `Tem bastante coisa prática para preencher e acompanhar os estudos.`,
+        `São arquivos para organizar estudo, prova, tarefa e planejamento.`,
+      ]);
+
+    case Intent.ObjectionExpensive:
+      if (type === "direct") {
+        return pickByRound(round, [
+          `Entendo. O valor é pelo pacote completo com 10 planners e 3 ebooks.`,
+          `Eu entendo. A ideia é reunir várias ferramentas em um pacote só.`,
+          `Faz sentido pensar. São ${price} pelo conjunto completo em PDF.`,
+        ]);
+      }
+      if (type === "explanatory") {
+        return pickByRound(round, [
+          `O pacote foi montado para ajudar na organização da rotina, sem prometer resultado mágico.`,
+          `Além dos planners, os ebooks explicam como usar melhor o material na rotina de estudo.`,
+          `É um material de apoio para organizar tarefas, provas, revisões e metas ao longo do ano.`,
+        ]);
+      }
+      return pickByRound(round, [
+        `Super entendo. Se quiser, posso te mostrar exatamente o que vem antes de decidir.`,
+        `Tranquilo. Posso te explicar o conteúdo para você ver se faz sentido.`,
+        `Sem problema. É bom olhar o que vem no pacote e decidir com calma.`,
+      ]);
+
+    default:
+      if (type === "direct") {
+        return pickByRound(round, [
+          `Entendi. Sobre o Planner Estudante Pro, posso te ajudar com preço, conteúdo ou acesso.`,
+          `Certo. Se sua dúvida for sobre o planner, posso te explicar de forma simples.`,
+          `Beleza. Quer saber sobre o conteúdo, valor ou como receber?`,
+        ]);
+      }
+      if (type === "explanatory") {
+        return pickByRound(round, [
+          `O Planner Estudante Pro é um pacote digital com 10 planners em PDF e 3 ebooks bônus para organização dos estudos.`,
+          `Posso te explicar o que vem no pacote, para quem serve, valor e como funciona o acesso.`,
+          `O foco do material é ajudar na organização escolar e na rotina de estudos com páginas práticas em PDF.`,
+        ]);
+      }
+      return pickByRound(round, [
+        `Me fala o que você quer saber que eu te explico direitinho.`,
+        `Posso te ajudar por partes: conteúdo, preço ou como receber.`,
+        `Se for sobre o Planner Estudante Pro, eu te explico rapidinho.`,
+      ]);
+  }
+}
+
 /**
  * Generate a single suggestion for a given intent, suggestion type, and round.
  * Round 1: standard phrases.
@@ -14,6 +182,10 @@ function buildSuggestion(intent: Intent, type: SuggestionType, round: number = 1
   const price = commercialConfig.price;
   const hasCheckout = commercialConfig.isCheckoutConfigured;
   const platform = commercialConfig.checkoutPlatform;
+
+  if (round > 2) {
+    return buildExtendedSuggestion(intent, type, round, price, hasCheckout, platform);
+  }
 
   switch (intent) {
     case Intent.AskPrice: {

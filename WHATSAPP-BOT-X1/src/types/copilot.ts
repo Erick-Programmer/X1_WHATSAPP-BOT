@@ -31,6 +31,7 @@ export interface ReviewItem {
   customerMessage: string;
   intent: Intent;
   suggestions: ReplySuggestion[];
+  suggestionRound?: number;
   status: ReviewStatus;
   chosenSuggestionId: string | null;
   saleOutcome?: SaleOutcome;

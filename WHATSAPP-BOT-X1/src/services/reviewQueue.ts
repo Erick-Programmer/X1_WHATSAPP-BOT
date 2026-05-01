@@ -57,6 +57,7 @@ class ReviewQueue {
       customerMessage,
       intent,
       suggestions,
+      suggestionRound: 1,
       status: "pending_review",
       chosenSuggestionId: null,
       createdAt: now,
@@ -130,7 +131,11 @@ class ReviewQueue {
    * Keeps the item in pending_review status.
    * Resets chosenSuggestionId to null.
    */
-  regenerateSuggestions(reviewId: string, newSuggestions: ReplySuggestion[]): ReviewItem {
+  regenerateSuggestions(
+    reviewId: string,
+    newSuggestions: ReplySuggestion[],
+    suggestionRound?: number
+  ): ReviewItem {
     const item = this.items.get(reviewId);
     if (!item) {
       throw new Error(`Review item ${reviewId} not found`);
@@ -152,6 +157,7 @@ class ReviewQueue {
     }
 
     item.suggestions = newSuggestions;
+    item.suggestionRound = suggestionRound ?? ((item.suggestionRound ?? 1) + 1);
     item.chosenSuggestionId = null;
     item.updatedAt = new Date();
 

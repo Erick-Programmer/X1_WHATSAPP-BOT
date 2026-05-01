@@ -211,13 +211,15 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
 
-      const newSuggestions = generateSuggestions(item.intent, 2);
-      reviewQueue.regenerateSuggestions(reviewId, newSuggestions);
+      const nextRound = (item.suggestionRound ?? 1) + 1;
+      const newSuggestions = generateSuggestions(item.intent, nextRound);
+      reviewQueue.regenerateSuggestions(reviewId, newSuggestions, nextRound);
 
       const updated = reviewQueue.getReviewItem(reviewId);
       jsonResponse(res, 200, {
         reviewId: updated!.id,
         status: updated!.status,
+        suggestionRound: updated!.suggestionRound,
         suggestions: updated!.suggestions.map((s) => ({
           id: s.id,
           type: s.type,
