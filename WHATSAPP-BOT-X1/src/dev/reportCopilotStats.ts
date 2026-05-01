@@ -4,7 +4,7 @@ import * as path from "path";
 const LOG_FILE = path.resolve(process.cwd(), "data", "copilot-events.jsonl");
 
 interface SentEvent {
-  event: "suggestion_sent";
+  event: "suggestion_sent" | "manual_suggestion_sent";
   reviewId: string;
   intent: string;
   suggestionType: string;
@@ -44,7 +44,7 @@ function report(): void {
   for (const line of lines) {
     try {
       const parsed = JSON.parse(line);
-      if (parsed.event === "suggestion_sent" || parsed.event === "sale_outcome") {
+      if (parsed.event === "suggestion_sent" || parsed.event === "manual_suggestion_sent" || parsed.event === "sale_outcome") {
         events.push(parsed as Event);
       }
     } catch {
@@ -54,6 +54,8 @@ function report(): void {
 
   // --- Counters ---
   let totalSent = 0;
+  let totalMockSent = 0;
+  let totalManualSent = 0;
   let totalSaleOutcomes = 0;
   let totalSales = 0;
 
@@ -69,6 +71,24 @@ function report(): void {
   for (const ev of events) {
     if (ev.event === "suggestion_sent") {
       totalSent++;
+      totalMockSent++;
+
+      // By intent
+      if (!byIntent[ev.intent]) byIntent[ev.intent] = { sent: 0, sales: 0 };
+      byIntent[ev.intent].sent++;
+
+      // By type
+      if (!byType[ev.suggestionType]) byType[ev.suggestionType] = { sent: 0, sales: 0 };
+      byType[ev.suggestionType].sent++;
+
+      // By text
+      if (!byText[ev.suggestionText]) byText[ev.suggestionText] = { count: 0, sales: 0 };
+      byText[ev.suggestionText].count++;
+    }
+
+    if (ev.event === "manual_suggestion_sent") {
+      totalSent++;
+      totalManualSent++;
 
       // By intent
       if (!byIntent[ev.intent]) byIntent[ev.intent] = { sent: 0, sales: 0 };
@@ -113,10 +133,12 @@ function report(): void {
   console.log(sep);
 
   console.log("\nVisao Geral");
-  console.log(`   Total enviados:      ${totalSent}`);
-  console.log(`   Total sale_outcome:  ${totalSaleOutcomes}`);
-  console.log(`   Vendas (sale: true): ${totalSales}`);
-  console.log(`   Conversao geral:     ${pct(totalSales, totalSent)}`);
+  console.log(`   Total enviados API/mock: ${totalMockSent}`);
+  console.log(`   Total enviados manual:   ${totalManualSent}`);
+  console.log(`   Total enviados geral:    ${totalSent}`);
+  console.log(`   Total sale_outcome:      ${totalSaleOutcomes}`);
+  console.log(`   Vendas (sale: true):     ${totalSales}`);
+  console.log(`   Conversao geral:         ${pct(totalSales, totalSent)}`);
 
   if (skipped > 0) {
     console.log(`   Linhas ignoradas:    ${skipped}`);

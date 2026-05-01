@@ -61,7 +61,24 @@ interface SaleOutcomeEvent {
   createdAt: string;
 }
 
-type EventLogEntry = CopilotEvent | SaleOutcomeEvent;
+/**
+ * Event shape for manual suggestion sent (manual mode, no API call).
+ */
+interface ManualSuggestionSentEvent {
+  event: "manual_suggestion_sent";
+  reviewId: string;
+  contactId: string;
+  messageId: string;
+  intent: string;
+  customerMessage: string;
+  suggestionId?: string;
+  suggestionType?: string;
+  suggestionText?: string;
+  status: string;
+  createdAt: string;
+}
+
+type EventLogEntry = CopilotEvent | SaleOutcomeEvent | ManualSuggestionSentEvent;
 
 /**
  * Append a single event as a JSON line to the log file.
@@ -233,6 +250,26 @@ export function logSaleOutcome(
   };
 
   logEvent(event);
+}
+
+/**
+ * Log when a suggestion is marked as manually sent (no API call).
+ */
+export function logManualSuggestionSent(item: ReviewItem): void {
+  const suggestion = item.suggestions.find((s) => s.id === item.chosenSuggestionId);
+  logEvent({
+    event: "manual_suggestion_sent",
+    reviewId: item.id,
+    contactId: item.contactId,
+    messageId: item.messageId,
+    intent: item.intent,
+    customerMessage: item.customerMessage,
+    suggestionId: suggestion?.id,
+    suggestionType: suggestion?.type,
+    suggestionText: suggestion?.text,
+    status: item.status,
+    createdAt: new Date().toISOString(),
+  });
 }
 
 /**

@@ -42,20 +42,22 @@ function parseBody(req: http.IncomingMessage): Promise<Record<string, unknown>> 
 
 function readStats(): Record<string, unknown> {
   if (!fs.existsSync(LOG_FILE)) {
-    return { totalSent: 0, totalSaleOutcomes: 0, totalSales: 0, conversion: "0.00%" };
+    return { totalSent: 0, totalMockSent: 0, totalManualSent: 0, totalSaleOutcomes: 0, totalSales: 0, conversion: "0.00%" };
   }
 
   const raw = fs.readFileSync(LOG_FILE, "utf-8");
   const lines = raw.split("\n").filter((l) => l.trim().length > 0);
 
-  let totalSent = 0;
+  let totalMockSent = 0;
+  let totalManualSent = 0;
   let totalSaleOutcomes = 0;
   let totalSales = 0;
 
   for (const line of lines) {
     try {
       const ev = JSON.parse(line);
-      if (ev.event === "suggestion_sent") totalSent++;
+      if (ev.event === "suggestion_sent") totalMockSent++;
+      if (ev.event === "manual_suggestion_sent") totalManualSent++;
       if (ev.event === "sale_outcome") {
         totalSaleOutcomes++;
         if (ev.sale === true) totalSales++;
@@ -65,9 +67,10 @@ function readStats(): Record<string, unknown> {
     }
   }
 
+  const totalSent = totalMockSent + totalManualSent;
   const conversion = totalSent > 0 ? ((totalSales / totalSent) * 100).toFixed(2) + "%" : "0.00%";
 
-  return { totalSent, totalSaleOutcomes, totalSales, conversion };
+  return { totalSent, totalMockSent, totalManualSent, totalSaleOutcomes, totalSales, conversion };
 }
 
 // ─── Router ─────────────────────────────────────────────────
@@ -91,6 +94,74 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     // GET /api/stats
     if (method === "GET" && url === "/api/stats") {
       jsonResponse(res, 200, readStats());
+      return;
+    }
+
+    // POST /api/inbox/import
+    if (method === "POST" && url === "/api/inbox/import") {
+      const body = await parseBody(req);
+      const lastMessage = (body.lastMessage as string || "").trim();
+      if (!lastMessage) {
+        jsonResponse(res, 400, { error: "lastMessage é obrigatório" });
+        return;
+      }
+
+      const source = (body.source as string) || "manual";
+      const rawContactName = (body.contactName as string) || "";
+      const rawContactPhone = (body.contactPhone as string) || "";
+      const receivedAt = (body.receivedAt as string) || new Date().toISOString();
+
+      // Limpar telefone: só dígitos
+      const contactPhone = rawContactPhone.replace(/\D/g, "");
+
+      // Gerar contactId
+      let contactId: string;
+      if (contactPhone) {
+        contactId = contactPhone;
+      } else if (rawContactName) {
+        contactId = rawContactName.trim();
+      } else {
+        contactId = `unknown_${Date.now()}`;
+      }
+
+      const messageId = `msg_import_${Date.now()}`;
+
+      const intentResult = classifyIntent(lastMessage);
+      const suggestions = generateSuggestions(intentResult.intent);
+
+      const item = reviewQueue.createReviewItem(
+        contactId,
+        messageId,
+        lastMessage,
+        intentResult.intent,
+        suggestions
+      );
+
+      // Salvar campos extras
+      item.contactName = rawContactName || undefined;
+      item.contactPhone = contactPhone || undefined;
+      item.source = source as "manual" | "whatsapp_web_extension" | "api" | "mock";
+      item.receivedAt = receivedAt;
+
+      jsonResponse(res, 201, {
+        reviewId: item.id,
+        contactId: item.contactId,
+        contactName: item.contactName,
+        contactPhone: item.contactPhone,
+        messageId: item.messageId,
+        customerMessage: item.customerMessage,
+        intent: item.intent,
+        confidence: intentResult.confidence,
+        source: item.source,
+        receivedAt: item.receivedAt,
+        status: item.status,
+        suggestions: item.suggestions.map((s) => ({
+          id: s.id,
+          type: s.type,
+          text: s.text,
+          validated: s.validated,
+        })),
+      });
       return;
     }
 
@@ -206,6 +277,79 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       });
 
       jsonResponse(res, 200, { reviewId, sale, status: item.status });
+      return;
+    }
+
+    // POST /api/reviews/:id/manual-sent
+    const manualSentMatch = url.match(/^\/api\/reviews\/([^/]+)\/manual-sent$/);
+    if (method === "POST" && manualSentMatch) {
+      const reviewId = manualSentMatch[1];
+      const body = await parseBody(req);
+      const suggestionId = body.suggestionId as string;
+      if (!suggestionId) {
+        jsonResponse(res, 400, { error: "suggestionId is required" });
+        return;
+      }
+
+      try {
+        reviewQueue.markManualSent(reviewId, suggestionId);
+        const updated = reviewQueue.getReviewItem(reviewId);
+        jsonResponse(res, 200, {
+          reviewId: updated!.id,
+          status: updated!.status,
+          chosenSuggestionId: updated!.chosenSuggestionId,
+        });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Erro desconhecido";
+        jsonResponse(res, 400, { error: msg });
+      }
+      return;
+    }
+
+    // POST /api/reviews/:id/manual-status
+    const manualStatusMatch = url.match(/^\/api\/reviews\/([^/]+)\/manual-status$/);
+    if (method === "POST" && manualStatusMatch) {
+      const reviewId = manualStatusMatch[1];
+      const body = await parseBody(req);
+      const manualStatus = body.manualStatus as string;
+      const validStatuses = ["novo", "conversando", "interessado", "comprou", "nao_comprou"];
+      if (!validStatuses.includes(manualStatus)) {
+        jsonResponse(res, 400, { error: `manualStatus invalido. Use: ${validStatuses.join(", ")}` });
+        return;
+      }
+
+      try {
+        reviewQueue.updateManualStatus(reviewId, manualStatus as "novo" | "conversando" | "interessado" | "comprou" | "nao_comprou");
+        const updated = reviewQueue.getReviewItem(reviewId);
+        jsonResponse(res, 200, {
+          reviewId: updated!.id,
+          manualStatus: updated!.manualStatus,
+        });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Erro desconhecido";
+        jsonResponse(res, 400, { error: msg });
+      }
+      return;
+    }
+
+    // POST /api/reviews/:id/manual-note
+    const manualNoteMatch = url.match(/^\/api\/reviews\/([^/]+)\/manual-note$/);
+    if (method === "POST" && manualNoteMatch) {
+      const reviewId = manualNoteMatch[1];
+      const body = await parseBody(req);
+      const manualNote = (body.manualNote as string) || "";
+
+      try {
+        reviewQueue.updateManualNote(reviewId, manualNote);
+        const updated = reviewQueue.getReviewItem(reviewId);
+        jsonResponse(res, 200, {
+          reviewId: updated!.id,
+          manualNote: updated!.manualNote,
+        });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Erro desconhecido";
+        jsonResponse(res, 400, { error: msg });
+      }
       return;
     }
 

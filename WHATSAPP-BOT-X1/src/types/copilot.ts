@@ -34,6 +34,12 @@ export interface ReviewItem {
   status: ReviewStatus;
   chosenSuggestionId: string | null;
   saleOutcome?: SaleOutcome;
+  manualStatus?: "novo" | "conversando" | "interessado" | "comprou" | "nao_comprou";
+  manualNote?: string;
+  contactName?: string;
+  contactPhone?: string;
+  source?: "manual" | "whatsapp_web_extension" | "api" | "mock";
+  receivedAt?: string;
   createdAt: Date;
   updatedAt: Date;
 }

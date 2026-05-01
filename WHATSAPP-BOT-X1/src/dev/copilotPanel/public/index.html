@@ -23,6 +23,8 @@ h2 { font-size: 1.1rem; margin-bottom: 8px; color: #0f3460; }
 .btn-warning:hover { background: #d68910; }
 .btn-secondary { background: #7f8c8d; color: #fff; }
 .btn-secondary:hover { background: #6c7a7b; }
+.btn-info { background: #17a2b8; color: #fff; }
+.btn-info:hover { background: #138496; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 input[type="text"] { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85rem; flex: 1; min-width: 200px; }
 .tag { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 0.75rem; font-weight: 600; }
@@ -33,6 +35,11 @@ input[type="text"] { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4
 .tag-expired { background: #e2e3e5; color: #383d41; }
 .tag-sale-yes { background: #d4edda; color: #155724; border: 1px solid #155724; }
 .tag-sale-no { background: #f8d7da; color: #721c24; border: 1px solid #721c24; }
+.tag-manual-novo { background: #cce5ff; color: #004085; border: 1px solid #004085; }
+.tag-manual-conversando { background: #fef3cd; color: #856404; border: 1px solid #856404; }
+.tag-manual-interessado { background: #d4edda; color: #155724; border: 1px solid #155724; }
+.tag-manual-comprou { background: #1e7e34; color: #fff; border: 1px solid #155724; }
+.tag-manual-nao_comprou { background: #f8d7da; color: #721c24; border: 1px solid #721c24; }
 .tag-safe-mode { background: #fef3cd; color: #856404; border: 1px solid #856404; }
 .tag-armed-off { background: #f8d7da; color: #721c24; border: 1px solid #721c24; }
 .tag-live-on { background: #d4edda; color: #155724; border: 1px solid #155724; }
@@ -41,6 +48,7 @@ input[type="text"] { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4
 .suggestion { border: 1px solid #e0e0e0; border-radius: 4px; padding: 10px; margin-bottom: 8px; }
 .suggestion-text { font-size: 0.85rem; margin-bottom: 6px; color: #333; }
 .suggestion-meta { font-size: 0.75rem; color: #666; margin-bottom: 6px; }
+.reminder { font-size: 0.75rem; color: #856404; background: #fef3cd; padding: 4px 8px; border-radius: 3px; margin-top: 6px; }
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
 .stat-item { text-align: center; }
 .stat-value { font-size: 1.5rem; font-weight: 700; color: #0f3460; }
@@ -79,10 +87,32 @@ input[type="text"] { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4
     <div id="credentialsContent"></div>
   </div>
 
-  <!-- ConfiguraÃ§Ã£o Comercial -->
+  <!-- Configuração Comercial -->
   <div class="card" id="commercialCard">
-    <h2>ConfiguraÃ§Ã£o Comercial</h2>
+    <h2>Configuração Comercial</h2>
     <div id="commercialContent"></div>
+  </div>
+
+  <!-- Importar mensagem manualmente -->
+  <div class="card">
+    <h2>Importar mensagem manualmente</h2>
+    <div style="margin-bottom:8px;font-size:0.85rem;color:#666;">Simula a futura extensão do WhatsApp Web.</div>
+    <div style="margin-bottom:6px;">
+      <label style="font-size:0.8rem;font-weight:600;">Nome do cliente</label>
+      <input type="text" id="importName" placeholder="João" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;">
+    </div>
+    <div style="margin-bottom:6px;">
+      <label style="font-size:0.8rem;font-weight:600;">Telefone do cliente</label>
+      <input type="text" id="importPhone" placeholder="5511999999999" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;">
+    </div>
+    <div style="margin-bottom:6px;">
+      <label style="font-size:0.8rem;font-weight:600;">Última mensagem</label>
+      <input type="text" id="importMessage" placeholder="quanto custa?" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;">
+    </div>
+    <div class="flex">
+      <button class="btn btn-primary" onclick="importManualMessage()">Criar atendimento</button>
+    </div>
+    <div id="importError" class="error-msg"></div>
   </div>
 
   <!-- Create mock message -->
@@ -100,12 +130,14 @@ input[type="text"] { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4
 
   <!-- Stats -->
   <div class="card">
-    <h2>Metricas</h2>
+    <h2>Métricas</h2>
     <div class="stats-grid" id="statsGrid">
-      <div class="stat-item"><div class="stat-value" id="statSent">0</div><div class="stat-label">Enviados</div></div>
+      <div class="stat-item"><div class="stat-value" id="statTotal">0</div><div class="stat-label">Enviados total</div></div>
+      <div class="stat-item"><div class="stat-value" id="statManual">0</div><div class="stat-label">Enviados manual</div></div>
+      <div class="stat-item"><div class="stat-value" id="statMock">0</div><div class="stat-label">Enviados API/mock</div></div>
       <div class="stat-item"><div class="stat-value" id="statOutcomes">0</div><div class="stat-label">Sale Outcome</div></div>
       <div class="stat-item"><div class="stat-value" id="statSales">0</div><div class="stat-label">Vendas</div></div>
-      <div class="stat-item"><div class="stat-value" id="statConv">0.00%</div><div class="stat-label">Conversao</div></div>
+      <div class="stat-item"><div class="stat-value" id="statConv">0.00%</div><div class="stat-label">Conversão</div></div>
     </div>
   </div>
 </div>
@@ -122,6 +154,23 @@ async function api(method, path, body) {
   return data;
 }
 
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/[&]/g, '&' + 'amp;').replace(/[<]/g, '&' + 'lt;').replace(/[>]/g, '&' + 'gt;').replace(/["]/g, '&' + 'quot;').replace(/[']/g, '&#' + '039;');
+}
+
+function getSuggestionReminder(intent) {
+  const map = {
+    positive_confirmation: 'Depois de enviar o texto, anexe assets/produto-planners.png',
+    ask_price: 'Esta resposta pode incluir o link de checkout aprovado, se configurado.',
+    buy_intent: 'Esta resposta pode incluir o link de checkout aprovado, se configurado.',
+    objection_expensive: 'Mensagem apenas em texto.',
+    objection_think: 'Mensagem apenas em texto.',
+    unknown: 'Mensagem apenas em texto.'
+  };
+  return map[intent] || null;
+}
+
 function statusTag(status) {
   const map = {
     pending_review: 'tag-pending',
@@ -129,6 +178,18 @@ function statusTag(status) {
     sent: 'tag-sent',
     cancelled: 'tag-cancelled',
     expired: 'tag-expired'
+  };
+  return '<span class="tag ' + (map[status] || '') + '">' + status + '</span>';
+}
+
+function manualStatusTag(status) {
+  if (!status) return '';
+  const map = {
+    novo: 'tag-manual-novo',
+    conversando: 'tag-manual-conversando',
+    interessado: 'tag-manual-interessado',
+    comprou: 'tag-manual-comprou',
+    nao_comprou: 'tag-manual-nao_comprou'
   };
   return '<span class="tag ' + (map[status] || '') + '">' + status + '</span>';
 }
@@ -145,32 +206,46 @@ function renderReviews(reviews) {
     const isPending = r.status === 'pending_review';
     const isSent = r.status === 'sent';
     const hasOutcome = r.saleOutcome && (r.saleOutcome.sale !== undefined);
+    const contactPhoneDigits = r.contactPhone ? r.contactPhone.replace(/\D/g, '') : '';
+    const hasValidPhone = contactPhoneDigits.length >= 10;
 
     html += '<div class="card">' +
       '<div class="flex" style="justify-content:space-between;margin-bottom:8px;">' +
-        '<strong>Review: ' + r.id.substring(0,8) + '...</strong>' +
+        '<strong>Review: ' + escapeHtml(r.id.substring(0,8)) + '...</strong>' +
         statusTag(r.status) +
       '</div>' +
       '<div style="font-size:0.85rem;margin-bottom:8px;">' +
-        '<div><strong>Contato:</strong> ' + r.contactId + '</div>' +
-        '<div><strong>Mensagem:</strong> "' + r.customerMessage + '"</div>' +
-        '<div><strong>Intencao:</strong> ' + r.intent + '</div>' +
+        '<div><strong>Contato:</strong> ' + escapeHtml(r.contactId) + '</div>' +
+        (r.contactName ? '<div><strong>Nome:</strong> ' + escapeHtml(r.contactName) + '</div>' : '') +
+        (r.contactPhone ? '<div><strong>Telefone:</strong> ' + escapeHtml(r.contactPhone) + '</div>' : '') +
+        (r.source ? '<div><strong>Origem:</strong> ' + escapeHtml(r.source) + '</div>' : '') +
+        '<div><strong>Mensagem:</strong> "' + escapeHtml(r.customerMessage) + '"</div>' +
+        '<div><strong>Intenção:</strong> ' + escapeHtml(r.intent) + '</div>' +
+        '<div style="margin-top:4px;"><strong>Status lead:</strong> ' + manualStatusTag(r.manualStatus) + '</div>' +
       '</div>';
 
     // Suggestions
     if (r.suggestions && r.suggestions.length > 0) {
-      html += '<div><strong>Sugestoes:</strong></div>';
+      html += '<div><strong>Sugestões:</strong></div>';
       for (const s of r.suggestions) {
         const validated = s.validated ? 'OK' : 'FALHOU';
+        const reminder = getSuggestionReminder(r.intent);
         html += '<div class="suggestion">' +
-          '<div class="suggestion-meta">[' + s.type + '] QA: ' + validated + '</div>' +
-          '<div class="suggestion-text">' + s.text + '</div>';
+          '<div class="suggestion-meta">[' + escapeHtml(s.type) + '] QA: ' + validated + '</div>' +
+          '<div class="suggestion-text">' + escapeHtml(s.text) + '</div>' +
+          (reminder ? '<div class="reminder">' + escapeHtml(reminder) + '</div>' : '') +
+          '<div class="flex" style="margin-top:6px;">' +
+            '<button class="btn btn-secondary" onclick="copySuggestion(\'' + r.id + '\',\'' + s.id + '\')">Copiar</button>';
         if (isPending) {
-          html += '<div class="flex">' +
-            '<button class="btn btn-success" onclick="approveAndSend(\'' + r.id + '\',\'' + s.id + '\')">Enviar</button>' +
-          '</div>';
+          html += '<button class="btn btn-success" onclick="manualSent(\'' + r.id + '\',\'' + s.id + '\')">Enviar manual</button>' +
+            '<button class="btn btn-primary" onclick="approveAndSend(\'' + r.id + '\',\'' + s.id + '\')">Enviar mock (API)</button>';
         }
-        html += '</div>';
+        if (hasValidPhone) {
+          html += '<button class="btn btn-info" onclick="openWhatsApp(\'' + r.id + '\',\'' + s.id + '\')">Abrir WhatsApp com texto</button>';
+        }
+        html += '</div>' +
+        '<div id="copy-' + r.id + '-' + s.id + '" class="success-msg" style="display:none;">Copiado!</div>' +
+        '</div>';
       }
     }
 
@@ -186,24 +261,105 @@ function renderReviews(reviews) {
     if (isSent && !hasOutcome) {
       html += '<div class="flex" style="margin-top:8px;">' +
         '<button class="btn btn-success" onclick="markSale(\'' + r.id + '\',true)">Marcar venda</button>' +
-        '<button class="btn btn-secondary" onclick="markSale(\'' + r.id + '\',false)">Marcar nao venda</button>' +
+        '<button class="btn btn-secondary" onclick="markSale(\'' + r.id + '\',false)">Marcar não venda</button>' +
       '</div>';
     }
 
     // Outcome badge: sent with outcome
     if (isSent && hasOutcome) {
       const outcomeClass = r.saleOutcome.sale ? 'tag-sale-yes' : 'tag-sale-no';
-      const outcomeText = r.saleOutcome.sale ? 'Venda registrada' : 'Nao venda registrada';
+      const outcomeText = r.saleOutcome.sale ? 'Venda registrada' : 'Não venda registrada';
       html += '<div class="flex" style="margin-top:8px;">' +
         '<span class="tag ' + outcomeClass + '">' + outcomeText + '</span>' +
       '</div>';
     }
+
+    // Manual lead status (sempre visivel)
+    html += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #eee;">' +
+      '<div class="flex" style="margin-bottom:6px;">' +
+        '<label style="font-size:0.8rem;font-weight:600;margin-right:4px;">Status lead:</label>' +
+        '<select id="manualStatus-' + r.id + '" onchange="updateManualStatus(\'' + r.id + '\')" style="padding:4px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;">' +
+          '<option value="novo"' + (r.manualStatus === 'novo' ? ' selected' : '') + '>Novo</option>' +
+          '<option value="conversando"' + (r.manualStatus === 'conversando' ? ' selected' : '') + '>Conversando</option>' +
+          '<option value="interessado"' + (r.manualStatus === 'interessado' ? ' selected' : '') + '>Interessado</option>' +
+          '<option value="comprou"' + (r.manualStatus === 'comprou' ? ' selected' : '') + '>Comprou</option>' +
+          '<option value="nao_comprou"' + (r.manualStatus === 'nao_comprou' ? ' selected' : '') + '>Não comprou</option>' +
+        '</select>' +
+      '</div>' +
+      '<div class="flex" style="align-items:flex-start;">' +
+        '<textarea id="manualNote-' + r.id + '" placeholder="Observação manual..." style="flex:1;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;min-height:50px;resize:vertical;">' + escapeHtml(r.manualNote || '') + '</textarea>' +
+        '<button class="btn btn-primary" onclick="saveManualNote(\'' + r.id + '\')" style="align-self:flex-end;">Salvar obs</button>' +
+      '</div>' +
+    '</div>';
 
     html += '<div id="msg-' + r.id + '" class="success-msg"></div>' +
     '</div>';
   }
 
   container.innerHTML = html;
+}
+
+async function copySuggestion(reviewId, suggestionId) {
+  const reviews = await api('GET', '/api/reviews');
+  const review = reviews.find(r => r.id === reviewId);
+  if (!review) return;
+  const suggestion = review.suggestions.find(s => s.id === suggestionId);
+  if (!suggestion) return;
+  try {
+    await navigator.clipboard.writeText(suggestion.text);
+    const el = document.getElementById('copy-' + reviewId + '-' + suggestionId);
+    if (el) {
+      el.style.display = 'block';
+      setTimeout(() => { el.style.display = 'none'; }, 2000);
+    }
+  } catch (e) {
+    alert('Erro ao copiar: ' + e.message);
+  }
+}
+
+async function manualSent(reviewId, suggestionId) {
+  const msgEl = document.getElementById('msg-' + reviewId);
+  msgEl.textContent = '';
+  msgEl.className = 'success-msg';
+  try {
+    await api('POST', '/api/reviews/' + reviewId + '/manual-sent', { suggestionId });
+    msgEl.textContent = 'Marcado como enviado manualmente!';
+    await loadReviews();
+    await loadStats();
+  } catch (e) {
+    msgEl.className = 'error-msg';
+    msgEl.textContent = 'Erro: ' + e.message;
+  }
+}
+
+async function updateManualStatus(reviewId) {
+  const select = document.getElementById('manualStatus-' + reviewId);
+  const status = select.value;
+  const msgEl = document.getElementById('msg-' + reviewId);
+  msgEl.textContent = '';
+  msgEl.className = 'success-msg';
+  try {
+    await api('POST', '/api/reviews/' + reviewId + '/manual-status', { manualStatus: status });
+    msgEl.textContent = 'Status atualizado: ' + status;
+  } catch (e) {
+    msgEl.className = 'error-msg';
+    msgEl.textContent = 'Erro: ' + e.message;
+  }
+}
+
+async function saveManualNote(reviewId) {
+  const textarea = document.getElementById('manualNote-' + reviewId);
+  const note = textarea.value;
+  const msgEl = document.getElementById('msg-' + reviewId);
+  msgEl.textContent = '';
+  msgEl.className = 'success-msg';
+  try {
+    await api('POST', '/api/reviews/' + reviewId + '/manual-note', { manualNote: note });
+    msgEl.textContent = 'Observação salva!';
+  } catch (e) {
+    msgEl.className = 'error-msg';
+    msgEl.textContent = 'Erro: ' + e.message;
+  }
 }
 
 async function loadReviews() {
@@ -219,12 +375,62 @@ async function loadReviews() {
 async function loadStats() {
   try {
     const s = await api('GET', '/api/stats');
-    document.getElementById('statSent').textContent = s.totalSent;
-    document.getElementById('statOutcomes').textContent = s.totalSaleOutcomes;
-    document.getElementById('statSales').textContent = s.totalSales;
-    document.getElementById('statConv').textContent = s.conversion;
+    document.getElementById('statTotal').textContent = s.totalSent || 0;
+    document.getElementById('statManual').textContent = s.totalManualSent || 0;
+    document.getElementById('statMock').textContent = s.totalMockSent || 0;
+    document.getElementById('statOutcomes').textContent = s.totalSaleOutcomes || 0;
+    document.getElementById('statSales').textContent = s.totalSales || 0;
+    document.getElementById('statConv').textContent = s.conversion || '0.00%';
   } catch (e) {
     // silent
+  }
+}
+
+async function importManualMessage() {
+  const name = document.getElementById('importName').value.trim();
+  const phone = document.getElementById('importPhone').value.trim();
+  const message = document.getElementById('importMessage').value.trim();
+  const errEl = document.getElementById('importError');
+  errEl.textContent = '';
+
+  if (!message) {
+    errEl.textContent = 'A última mensagem é obrigatória.';
+    return;
+  }
+
+  try {
+    await api('POST', '/api/inbox/import', {
+      source: 'manual',
+      contactName: name || undefined,
+      contactPhone: phone || undefined,
+      lastMessage: message
+    });
+    document.getElementById('importName').value = '';
+    document.getElementById('importPhone').value = '';
+    document.getElementById('importMessage').value = '';
+    await loadReviews();
+    await loadStats();
+  } catch (e) {
+    errEl.textContent = 'Erro: ' + e.message;
+  }
+}
+
+async function openWhatsApp(reviewId, suggestionId) {
+  const reviews = await api('GET', '/api/reviews');
+  const review = reviews.find(r => r.id === reviewId);
+  if (!review) return;
+  const suggestion = review.suggestions.find(s => s.id === suggestionId);
+  if (!suggestion) return;
+
+  const phoneDigits = review.contactPhone ? review.contactPhone.replace(/\D/g, '') : '';
+  if (phoneDigits.length < 10) {
+    alert('Telefone inválido para abrir WhatsApp.');
+    return;
+  }
+
+  const waLink = 'https://wa.me/' + phoneDigits + '?text=' + encodeURIComponent(suggestion.text);
+  if (confirm('Abrir WhatsApp para ' + phoneDigits + ' com esta resposta?')) {
+    window.open(waLink, '_blank');
   }
 }
 
@@ -261,7 +467,7 @@ async function regenerate(reviewId) {
   msgEl.textContent = '';
   try {
     await api('POST', '/api/reviews/' + reviewId + '/regenerate');
-    msgEl.textContent = 'Novas sugestoes geradas!';
+    msgEl.textContent = 'Novas sugestões geradas!';
     await loadReviews();
   } catch (e) {
     msgEl.className = 'error-msg';
@@ -274,7 +480,7 @@ async function markSale(reviewId, sale) {
   msgEl.textContent = '';
   try {
     await api('POST', '/api/reviews/' + reviewId + '/sale', { sale });
-    msgEl.textContent = sale ? 'Venda marcada!' : 'Nao venda marcada!';
+    msgEl.textContent = sale ? 'Venda marcada!' : 'Não venda marcada!';
     await loadStats();
   } catch (e) {
     msgEl.className = 'error-msg';
@@ -295,7 +501,7 @@ async function cancelReview(reviewId) {
   }
 }
 
-// â”€â”€â”€ Runtime state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Runtime state ──────────────────────────────────────────
 
 let runtimeState = null;
 
@@ -335,7 +541,7 @@ async function handleEnable() {
   const msgEl = document.getElementById('runtimeMsg');
   msgEl.textContent = '';
   msgEl.className = 'success-msg';
-  if (!confirm('VocÃª tem certeza que deseja ligar o envio real?')) return;
+  if (!confirm('Você tem certeza que deseja ligar o envio real?')) return;
   try {
     await api('POST', '/api/runtime/enable');
     msgEl.textContent = 'Bot ligado!';
@@ -351,7 +557,7 @@ async function handleDisable() {
   msgEl.textContent = '';
   msgEl.className = 'success-msg';
   const pending = runtimeState ? runtimeState.pendingReviewsCount : 0;
-  if (!confirm('Existem ' + pending + ' mensagens pendentes. VocÃª quer mesmo desligar o bot?')) return;
+  if (!confirm('Existem ' + pending + ' mensagens pendentes. Você quer mesmo desligar o bot?')) return;
   try {
     const result = await api('POST', '/api/runtime/disable');
     msgEl.textContent = 'Bot desligado!';
@@ -380,7 +586,7 @@ async function handleSafeMode() {
   }
 }
 
-// â”€â”€â”€ Credentials â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Credentials ────────────────────────────────────────────
 
 let credentialsState = null;
 let showCredentialsForm = false;
@@ -397,7 +603,6 @@ async function loadCredentials() {
 function renderCredentials(state) {
   const container = document.getElementById('credentialsContent');
   if (!state.hasCredentials || showCredentialsForm) {
-    // Show form
     container.innerHTML = '' +
       '<div style="margin-bottom:8px;font-size:0.85rem;color:#666;">' +
         'Preencha as credenciais do WhatsApp Cloud API.' +
@@ -408,11 +613,11 @@ function renderCredentials(state) {
       '</div>' +
       '<div style="margin-bottom:6px;">' +
         '<label style="font-size:0.8rem;font-weight:600;">WA_PHONE_NUMBER_ID</label>' +
-        '<input type="text" id="credPhoneNumberId" placeholder="ID do n\u00famero de telefone" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;">' +
+        '<input type="text" id="credPhoneNumberId" placeholder="ID do número de telefone" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;">' +
       '</div>' +
       '<div style="margin-bottom:6px;">' +
         '<label style="font-size:0.8rem;font-weight:600;">WA_BUSINESS_ACCOUNT_ID</label>' +
-        '<input type="text" id="credBusinessAccountId" placeholder="ID da conta de neg\u00f3cios" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;">' +
+        '<input type="text" id="credBusinessAccountId" placeholder="ID da conta de negócios" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;">' +
       '</div>' +
       '<div style="margin-bottom:6px;">' +
         '<label style="font-size:0.8rem;font-weight:600;">WA_VERIFY_TOKEN</label>' +
@@ -426,7 +631,6 @@ function renderCredentials(state) {
     return;
   }
 
-  // Show masked credentials
   const m = state.maskedCredentials;
   const savedAt = state.savedAt ? new Date(state.savedAt).toLocaleString('pt-BR') : '-';
   const lastUsedAt = state.lastUsedAt ? new Date(state.lastUsedAt).toLocaleString('pt-BR') : 'Nunca usada';
@@ -437,18 +641,20 @@ function renderCredentials(state) {
       '<div><strong>Phone ID:</strong> ' + m.phoneNumberId + '</div>' +
       '<div><strong>Business ID:</strong> ' + m.businessAccountId + '</div>' +
       '<div><strong>Verify:</strong> ' + m.verifyToken + '</div>' +
-      '<div style="margin-top:4px;color:#666;"><strong>Salvo em:</strong> ' + savedAt + '</div>' +
-      '<div style="color:#666;"><strong>\u00daltimo uso:</strong> ' + lastUsedAt + '</div>' +
+      '<div style="margin-top:4px;"><strong>Salvo em:</strong> ' + savedAt + '</div>' +
+      '<div><strong>Último uso:</strong> ' + lastUsedAt + '</div>' +
     '</div>' +
-    '<div style="margin-bottom:8px;">' +
-      '<span class="tag tag-env-blocked">Credenciais salvas n\u00e3o ativam envio real sozinhas.</span>' +
-    '</div>' +
-    '<div class="flex">' +
-      '<button class="btn btn-success" onclick="handleUseCredentials()">Usar credencial salva</button>' +
-      '<button class="btn btn-warning" onclick="handleToggleCredentialsForm()">Trocar credencial</button>' +
-      '<button class="btn btn-danger" onclick="handleClearCredentials()">Apagar credenciais</button>' +
+    '<div class="flex" style="margin-top:8px;">' +
+      '<button class="btn btn-warning" onclick="showCredentialsFormFn()">Editar credenciais</button>' +
+      '<button class="btn btn-danger" onclick="handleClearCredentials()">Limpar credenciais</button>' +
+      '<button class="btn btn-success" onclick="handleUseCredentials()">Usar salvas</button>' +
     '</div>' +
     '<div id="credMsg" class="success-msg"></div>';
+}
+
+function showCredentialsFormFn() {
+  showCredentialsForm = true;
+  renderCredentials(credentialsState);
 }
 
 function cancelCredentialsForm() {
@@ -456,24 +662,44 @@ function cancelCredentialsForm() {
   renderCredentials(credentialsState);
 }
 
-function handleToggleCredentialsForm() {
-  showCredentialsForm = true;
-  renderCredentials(credentialsState);
-}
-
 async function handleSaveCredentials() {
+  const apiToken = document.getElementById('credApiToken').value.trim();
+  const phoneNumberId = document.getElementById('credPhoneNumberId').value.trim();
+  const businessAccountId = document.getElementById('credBusinessAccountId').value.trim();
+  const verifyToken = document.getElementById('credVerifyToken').value.trim();
   const msgEl = document.getElementById('credMsg');
   msgEl.textContent = '';
   msgEl.className = 'success-msg';
-  const apiToken = document.getElementById('credApiToken').value;
-  const phoneNumberId = document.getElementById('credPhoneNumberId').value;
-  const businessAccountId = document.getElementById('credBusinessAccountId').value;
-  const verifyToken = document.getElementById('credVerifyToken').value;
+
+  if (!apiToken || !phoneNumberId || !businessAccountId || !verifyToken) {
+    msgEl.className = 'error-msg';
+    msgEl.textContent = 'Todos os campos são obrigatórios.';
+    return;
+  }
+
   try {
-    credentialsState = await api('POST', '/api/credentials/save', { apiToken, phoneNumberId, businessAccountId, verifyToken });
+    const result = await api('POST', '/api/credentials/save', { apiToken, phoneNumberId, businessAccountId, verifyToken });
+    credentialsState = { hasCredentials: true, maskedCredentials: result.maskedCredentials, savedAt: result.savedAt, lastUsedAt: result.lastUsedAt };
     showCredentialsForm = false;
     renderCredentials(credentialsState);
     msgEl.textContent = 'Credenciais salvas com sucesso!';
+  } catch (e) {
+    msgEl.className = 'error-msg';
+    msgEl.textContent = 'Erro: ' + e.message;
+  }
+}
+
+async function handleClearCredentials() {
+  const msgEl = document.getElementById('credMsg');
+  msgEl.textContent = '';
+  msgEl.className = 'success-msg';
+  if (!confirm('Limpar credenciais salvas?')) return;
+  try {
+    await api('POST', '/api/credentials/clear');
+    credentialsState = { hasCredentials: false };
+    showCredentialsForm = false;
+    renderCredentials(credentialsState);
+    msgEl.textContent = 'Credenciais limpas!';
   } catch (e) {
     msgEl.className = 'error-msg';
     msgEl.textContent = 'Erro: ' + e.message;
@@ -485,148 +711,113 @@ async function handleUseCredentials() {
   msgEl.textContent = '';
   msgEl.className = 'success-msg';
   try {
-    credentialsState = await api('POST', '/api/credentials/use-saved');
+    const result = await api('POST', '/api/credentials/use-saved');
+    credentialsState = { hasCredentials: true, maskedCredentials: result.maskedCredentials, savedAt: result.savedAt, lastUsedAt: result.lastUsedAt };
     renderCredentials(credentialsState);
-    msgEl.textContent = 'Credencial marcada como usada!';
+    msgEl.textContent = 'Credenciais marcadas como usadas!';
   } catch (e) {
     msgEl.className = 'error-msg';
     msgEl.textContent = 'Erro: ' + e.message;
   }
 }
 
-async function handleClearCredentials() {
-  const msgEl = document.getElementById('credMsg');
-  msgEl.textContent = '';
-  msgEl.className = 'success-msg';
-  if (!confirm('Tem certeza que deseja apagar as credenciais salvas?')) return;
-  try {
-    await api('POST', '/api/credentials/clear');
-    credentialsState = { hasCredentials: false };
-    showCredentialsForm = false;
-    renderCredentials(credentialsState);
-    msgEl.textContent = 'Credenciais apagadas!';
-  } catch (e) {
-    msgEl.className = 'error-msg';
-    msgEl.textContent = 'Erro: ' + e.message;
-  }
-}
-
-// â”€â”€â”€ Commercial Settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Commercial Settings ────────────────────────────────────
 
 let commercialState = null;
+let showCommercialForm = false;
 
-async function loadCommercialSettings() {
+async function loadCommercial() {
   try {
     commercialState = await api('GET', '/api/commercial-settings');
-    renderCommercialSettings(commercialState);
+    renderCommercial(commercialState);
   } catch (e) {
     // silent
   }
 }
 
-function checkoutStatusTag(status) {
-  const map = {
-    missing: 'tag-pending',
-    pending_validation: 'tag-pending',
-    validated: 'tag-approved',
-    approved: 'tag-sent',
-    rejected: 'tag-cancelled'
-  };
-  return '<span class="tag ' + (map[status] || '') + '">' + status + '</span>';
-}
-
-function renderCommercialSettings(state) {
+function renderCommercial(state) {
   const container = document.getElementById('commercialContent');
-  const hasSettings = state.hasSettings;
-  const s = hasSettings ? state.settings : null;
-
-  const productName = s ? s.productName : '';
-  const price = s ? s.price : '';
-  const checkoutUrl = s ? s.checkoutUrl : '';
-  const deliveryMethod = s ? s.deliveryMethod : '';
-  const checkoutStatus = s ? s.checkoutStatus : 'missing';
-  const validation = s ? s.validation : null;
-  const approvedAt = s && s.approvedAt ? new Date(s.approvedAt).toLocaleString('pt-BR') : null;
-
-  const canValidate = hasSettings;
-  const canApprove = checkoutStatus === 'validated';
-  const canReject = checkoutStatus !== 'missing' && checkoutStatus !== 'approved';
-  const canReset = hasSettings;
-
-  let validationHtml = '';
-  if (validation) {
-    const caktoLabel = validation.isCaktoDomain ? 'Sim' : 'N\u00e3o';
-    const errorHtml = validation.error
-      ? '<div style="color:#e74c3c;font-size:0.8rem;margin-top:4px;">Erro: ' + validation.error + '</div>'
-      : '';
-    validationHtml = '' +
-      '<div style="font-size:0.8rem;color:#666;margin-top:4px;padding:6px;background:#f9f9f9;border-radius:4px;">' +
-        '<div><strong>Status HTTP:</strong> ' + (validation.statusCode || '-') + '</div>' +
-        '<div><strong>URL final:</strong> ' + (validation.finalUrl || '-') + '</div>' +
-        '<div><strong>Dom\u00ednio Cakto:</strong> ' + caktoLabel + '</div>' +
-        '<div><strong>Verificado em:</strong> ' + new Date(validation.checkedAt).toLocaleString('pt-BR') + '</div>' +
-        errorHtml +
-      '</div>';
+  if (!state.hasSettings || showCommercialForm) {
+    container.innerHTML = '' +
+      '<div style="margin-bottom:8px;font-size:0.85rem;color:#666;">' +
+        'Configure os dados do produto para o checkout.' +
+      '</div>' +
+      '<div style="margin-bottom:6px;">' +
+        '<label style="font-size:0.8rem;font-weight:600;">Nome do produto</label>' +
+        '<input type="text" id="comProductName" placeholder="Planners" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;" value="' + escapeHtml((state.settings && state.settings.productName) || '') + '">' +
+      '</div>' +
+      '<div style="margin-bottom:6px;">' +
+        '<label style="font-size:0.8rem;font-weight:600;">Preço</label>' +
+        '<input type="text" id="comPrice" placeholder="R$ 47,00" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;" value="' + escapeHtml((state.settings && state.settings.price) || '') + '">' +
+      '</div>' +
+      '<div style="margin-bottom:6px;">' +
+        '<label style="font-size:0.8rem;font-weight:600;">URL do checkout</label>' +
+        '<input type="text" id="comCheckoutUrl" placeholder="https://checkout.kiwify.com.br/..." style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;" value="' + escapeHtml((state.settings && state.settings.checkoutUrl) || '') + '">' +
+      '</div>' +
+      '<div style="margin-bottom:6px;">' +
+        '<label style="font-size:0.8rem;font-weight:600;">Método de entrega</label>' +
+        '<input type="text" id="comDeliveryMethod" placeholder="E-mail / Download" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;" value="' + escapeHtml((state.settings && state.settings.deliveryMethod) || '') + '">' +
+      '</div>' +
+      '<div class="flex" style="margin-top:8px;">' +
+        '<button class="btn btn-primary" onclick="handleSaveCommercial()">Salvar configuração</button>' +
+        (state.hasSettings ? '<button class="btn btn-secondary" onclick="cancelCommercialForm()">Cancelar</button>' : '') +
+      '</div>' +
+      '<div id="comMsg" class="success-msg"></div>';
+    return;
   }
 
-  const approvedHtml = approvedAt
-    ? '<div style="font-size:0.8rem;color:#155724;margin-top:4px;"><strong>Aprovado em:</strong> ' + approvedAt + '</div>'
-    : '';
-
-  const warningHtml = checkoutStatus === 'validated'
-    ? '<div style="margin-top:6px;padding:6px;background:#fef3cd;border-radius:4px;font-size:0.8rem;color:#856404;">' +
-        '\u26a0\ufe0f Confira visualmente nome e pre\u00e7o na p\u00e1gina antes de aprovar.' +
-      '</div>'
-    : '';
+  const s = state.settings;
+  const approvedLabel = s.approved ? '<span class="tag tag-approved">Aprovado</span>' : '<span class="tag tag-pending">Pendente</span>';
 
   container.innerHTML = '' +
-    '<div style="margin-bottom:8px;">' +
-      '<div class="flex" style="justify-content:space-between;">' +
-        '<strong>Status do checkout:</strong>' +
-        checkoutStatusTag(checkoutStatus) +
-      '</div>' +
+    '<div style="font-size:0.85rem;margin-bottom:8px;">' +
+      '<div><strong>Produto:</strong> ' + escapeHtml(s.productName) + '</div>' +
+      '<div><strong>Preço:</strong> ' + escapeHtml(s.price) + '</div>' +
+      '<div><strong>Checkout:</strong> ' + escapeHtml(s.checkoutUrl) + '</div>' +
+      '<div><strong>Entrega:</strong> ' + escapeHtml(s.deliveryMethod) + '</div>' +
+      '<div><strong>Status:</strong> ' + approvedLabel + '</div>' +
     '</div>' +
-    '<div style="margin-bottom:6px;">' +
-      '<label style="font-size:0.8rem;font-weight:600;">Nome do produto</label>' +
-      '<input type="text" id="comProductName" value="' + productName.replace(/&/g, '&amp;').replace(/"/g, '"') + '" placeholder="Planner Estudante Pro" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;">' +
-    '</div>' +
-    '<div style="margin-bottom:6px;">' +
-      '<label style="font-size:0.8rem;font-weight:600;">Pre\u00e7o</label>' +
-      '<input type="text" id="comPrice" value="' + price.replace(/&/g, '&amp;').replace(/"/g, '"') + '" placeholder="R$ 27,00" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;">' +
-    '</div>' +
-    '<div style="margin-bottom:6px;">' +
-      '<label style="font-size:0.8rem;font-weight:600;">Link Cakto</label>' +
-      '<input type="text" id="comCheckoutUrl" value="' + checkoutUrl.replace(/&/g, '&amp;').replace(/"/g, '"') + '" placeholder="https://cakto.com.br/..." style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;">' +
-    '</div>' +
-    '<div style="margin-bottom:6px;">' +
-      '<label style="font-size:0.8rem;font-weight:600;">M\u00e9todo de entrega</label>' +
-      '<input type="text" id="comDeliveryMethod" value="' + deliveryMethod.replace(/&/g, '&amp;').replace(/"/g, '"') + '" placeholder="Entrega autom\u00e1tica por e-mail..." style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;">' +
-    '</div>' +
-    validationHtml +
-    approvedHtml +
-    warningHtml +
     '<div class="flex" style="margin-top:8px;">' +
-      '<button class="btn btn-primary" onclick="handleSaveCommercial()">Salvar configura\u00e7\u00e3o</button>' +
-      '<button class="btn btn-warning" onclick="handleValidateCheckout()"' + (canValidate ? '' : ' disabled') + '>Testar checkout</button>' +
-      '<button class="btn btn-success" onclick="handleApproveCheckout()"' + (canApprove ? '' : ' disabled') + '>Aprovar checkout</button>' +
-      '<button class="btn btn-secondary" onclick="handleRejectCheckout()"' + (canReject ? '' : ' disabled') + '>Rejeitar checkout</button>' +
-      '<button class="btn btn-danger" onclick="handleResetCommercial()"' + (canReset ? '' : ' disabled') + '>Resetar</button>' +
+      '<button class="btn btn-warning" onclick="showCommercialFormFn()">Editar</button>' +
+      '<button class="btn btn-success" onclick="handleValidateCheckout()">Validar checkout</button>' +
+      '<button class="btn btn-primary" onclick="handleApproveCommercial()">Aprovar</button>' +
+      '<button class="btn btn-secondary" onclick="handleRejectCommercial()">Rejeitar</button>' +
+      '<button class="btn btn-danger" onclick="handleResetCommercial()">Resetar</button>' +
     '</div>' +
     '<div id="comMsg" class="success-msg"></div>';
 }
 
+function showCommercialFormFn() {
+  showCommercialForm = true;
+  renderCommercial(commercialState);
+}
+
+function cancelCommercialForm() {
+  showCommercialForm = false;
+  renderCommercial(commercialState);
+}
+
 async function handleSaveCommercial() {
+  const productName = document.getElementById('comProductName').value.trim();
+  const price = document.getElementById('comPrice').value.trim();
+  const checkoutUrl = document.getElementById('comCheckoutUrl').value.trim();
+  const deliveryMethod = document.getElementById('comDeliveryMethod').value.trim();
   const msgEl = document.getElementById('comMsg');
   msgEl.textContent = '';
   msgEl.className = 'success-msg';
-  const productName = document.getElementById('comProductName').value;
-  const price = document.getElementById('comPrice').value;
-  const checkoutUrl = document.getElementById('comCheckoutUrl').value;
-  const deliveryMethod = document.getElementById('comDeliveryMethod').value;
+
+  if (!productName || !price || !checkoutUrl || !deliveryMethod) {
+    msgEl.className = 'error-msg';
+    msgEl.textContent = 'Todos os campos são obrigatórios.';
+    return;
+  }
+
   try {
-    commercialState = await api('POST', '/api/commercial-settings/save', { productName, price, checkoutUrl, deliveryMethod });
-    renderCommercialSettings(commercialState);
-    msgEl.textContent = 'Configura\u00e7\u00e3o salva!';
+    const result = await api('POST', '/api/commercial-settings/save', { productName, price, checkoutUrl, deliveryMethod });
+    commercialState = { hasSettings: true, settings: result.settings };
+    showCommercialForm = false;
+    renderCommercial(commercialState);
+    msgEl.textContent = 'Configuração salva!';
   } catch (e) {
     msgEl.className = 'error-msg';
     msgEl.textContent = 'Erro: ' + e.message;
@@ -637,45 +828,46 @@ async function handleValidateCheckout() {
   const msgEl = document.getElementById('comMsg');
   msgEl.textContent = '';
   msgEl.className = 'success-msg';
-  const checkoutUrl = document.getElementById('comCheckoutUrl').value;
-  if (!checkoutUrl) {
+  if (!commercialState || !commercialState.settings || !commercialState.settings.checkoutUrl) {
     msgEl.className = 'error-msg';
-    msgEl.textContent = 'Informe o link Cakto antes de testar.';
+    msgEl.textContent = 'Nenhum checkout configurado.';
     return;
   }
   try {
-    commercialState = await api('POST', '/api/commercial-settings/validate-checkout', { checkoutUrl });
-    renderCommercialSettings(commercialState);
-    msgEl.textContent = 'Valida\u00e7\u00e3o conclu\u00edda!';
+    const result = await api('POST', '/api/commercial-settings/validate-checkout', { checkoutUrl: commercialState.settings.checkoutUrl });
+    commercialState = { hasSettings: true, settings: result.settings };
+    renderCommercial(commercialState);
+    msgEl.textContent = 'Checkout validado!';
   } catch (e) {
     msgEl.className = 'error-msg';
     msgEl.textContent = 'Erro: ' + e.message;
   }
 }
 
-async function handleApproveCheckout() {
+async function handleApproveCommercial() {
   const msgEl = document.getElementById('comMsg');
   msgEl.textContent = '';
   msgEl.className = 'success-msg';
-  if (!confirm('Confira visualmente nome e pre\u00e7o na p\u00e1gina antes de aprovar. Deseja aprovar o checkout?')) return;
   try {
-    commercialState = await api('POST', '/api/commercial-settings/approve');
-    renderCommercialSettings(commercialState);
-    msgEl.textContent = 'Checkout aprovado!';
+    const result = await api('POST', '/api/commercial-settings/approve');
+    commercialState = { hasSettings: true, settings: result.settings };
+    renderCommercial(commercialState);
+    msgEl.textContent = 'Configuração aprovada!';
   } catch (e) {
     msgEl.className = 'error-msg';
     msgEl.textContent = 'Erro: ' + e.message;
   }
 }
 
-async function handleRejectCheckout() {
+async function handleRejectCommercial() {
   const msgEl = document.getElementById('comMsg');
   msgEl.textContent = '';
   msgEl.className = 'success-msg';
   try {
-    commercialState = await api('POST', '/api/commercial-settings/reject');
-    renderCommercialSettings(commercialState);
-    msgEl.textContent = 'Checkout rejeitado!';
+    const result = await api('POST', '/api/commercial-settings/reject');
+    commercialState = { hasSettings: true, settings: result.settings };
+    renderCommercial(commercialState);
+    msgEl.textContent = 'Configuração rejeitada!';
   } catch (e) {
     msgEl.className = 'error-msg';
     msgEl.textContent = 'Erro: ' + e.message;
@@ -686,22 +878,32 @@ async function handleResetCommercial() {
   const msgEl = document.getElementById('comMsg');
   msgEl.textContent = '';
   msgEl.className = 'success-msg';
-  if (!confirm('Tem certeza que deseja resetar a configura\u00e7\u00e3o comercial?')) return;
+  if (!confirm('Resetar configuração comercial?')) return;
   try {
     await api('POST', '/api/commercial-settings/reset');
     commercialState = { hasSettings: false };
-    renderCommercialSettings(commercialState);
-    msgEl.textContent = 'Configura\u00e7\u00e3o resetada!';
+    showCommercialForm = false;
+    renderCommercial(commercialState);
+    msgEl.textContent = 'Configuração resetada!';
   } catch (e) {
     msgEl.className = 'error-msg';
     msgEl.textContent = 'Erro: ' + e.message;
   }
 }
 
-// Initial load
-loadReviews();
-loadStats();
-loadRuntime();
-loadCredentials();
-loadCommercialSettings();
+// ─── Init ───────────────────────────────────────────────────
+
+async function init() {
+  await Promise.all([
+    loadRuntime(),
+    loadCredentials(),
+    loadCommercial(),
+    loadReviews(),
+    loadStats()
+  ]);
+}
+
+init();
 </script>
+</body>
+</html>

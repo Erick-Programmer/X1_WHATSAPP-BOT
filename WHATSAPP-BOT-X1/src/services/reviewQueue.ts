@@ -9,15 +9,35 @@ import {
   logReviewExpired,
   logSuggestionsRegenerated,
   logSaleOutcome,
+  logManualSuggestionSent,
 } from "./eventLogger";
+import { loadReviews, saveReviews } from "./reviewStore";
 
 /**
  * In-memory review queue for the copilot mode.
  * Stores pending review items and manages their lifecycle.
- * No database — uses a local Map.
+ * Persists to data/reviews.json so items survive server restarts.
  */
 class ReviewQueue {
   private items: Map<string, ReviewItem> = new Map();
+
+  constructor() {
+    const saved = loadReviews();
+    for (const item of saved) {
+      this.items.set(item.id, item);
+    }
+    if (saved.length > 0) {
+      console.log(`[reviewQueue] Restaurados ${saved.length} reviews do arquivo.`);
+    }
+  }
+
+  /**
+   * Persist all current reviews to disk.
+   * Errors are logged by saveReviews but never thrown.
+   */
+  private persist(): void {
+    saveReviews(Array.from(this.items.values()));
+  }
 
   /**
    * Create a new review item with pending_review status.
@@ -47,6 +67,8 @@ class ReviewQueue {
 
     // Log review_created + suggestions_generated
     logReviewCreated(item);
+
+    this.persist();
 
     return item;
   }
@@ -97,6 +119,8 @@ class ReviewQueue {
     // Log suggestion_approved
     logSuggestionApproved(item);
 
+    this.persist();
+
     return item;
   }
 
@@ -134,6 +158,8 @@ class ReviewQueue {
     // Log suggestions_regenerated + new suggestions_generated
     logSuggestionsRegenerated(item);
 
+    this.persist();
+
     return item;
   }
 
@@ -155,6 +181,7 @@ class ReviewQueue {
 
     item.status = "sent";
     item.updatedAt = new Date();
+    this.persist();
     return item;
   }
 
@@ -173,6 +200,8 @@ class ReviewQueue {
     // Log review_cancelled
     logReviewCancelled(item);
 
+    this.persist();
+
     return item;
   }
 
@@ -190,6 +219,8 @@ class ReviewQueue {
 
     // Log review_expired
     logReviewExpired(item);
+
+    this.persist();
 
     return item;
   }
@@ -273,6 +304,84 @@ class ReviewQueue {
     };
 
     logSaleOutcome(item, sale, options);
+
+    this.persist();
+  }
+
+  /**
+   * Mark a suggestion as manually sent (no API call).
+   * Only allowed if status is "pending_review".
+   * Sets chosenSuggestionId, changes status to "sent", logs manual_suggestion_sent.
+   * Does NOT call whatsappClient.
+   */
+  markManualSent(reviewId: string, suggestionId: string): ReviewItem {
+    const item = this.items.get(reviewId);
+    if (!item) {
+      throw new Error(`Review item ${reviewId} not found`);
+    }
+
+    if (item.status === "cancelled") {
+      throw new Error(`Review item ${reviewId} is cancelled`);
+    }
+    if (item.status === "expired") {
+      throw new Error(`Review item ${reviewId} is expired`);
+    }
+    if (item.status === "sent") {
+      throw new Error(`Review item ${reviewId} is already sent`);
+    }
+    if (item.status === "approved") {
+      throw new Error(
+        `Review item ${reviewId} is already approved. Use "Enviar mock" instead.`
+      );
+    }
+
+    const suggestion = item.suggestions.find((s) => s.id === suggestionId);
+    if (!suggestion) {
+      throw new Error(`Suggestion ${suggestionId} not found in review item ${reviewId}`);
+    }
+
+    item.chosenSuggestionId = suggestionId;
+    item.status = "sent";
+    item.updatedAt = new Date();
+
+    // Log manual_suggestion_sent (no whatsappClient call)
+    logManualSuggestionSent(item);
+
+    this.persist();
+
+    return item;
+  }
+
+  /**
+   * Update the manual lead status for a review item.
+   * Only updates the in-memory field, no event logged.
+   */
+  updateManualStatus(reviewId: string, status: "novo" | "conversando" | "interessado" | "comprou" | "nao_comprou"): ReviewItem {
+    const item = this.items.get(reviewId);
+    if (!item) {
+      throw new Error(`Review item ${reviewId} not found`);
+    }
+
+    item.manualStatus = status;
+    item.updatedAt = new Date();
+    this.persist();
+    return item;
+  }
+
+  /**
+   * Update the manual note for a review item.
+   * Only updates the in-memory field, no event logged.
+   */
+  updateManualNote(reviewId: string, note: string): ReviewItem {
+    const item = this.items.get(reviewId);
+    if (!item) {
+      throw new Error(`Review item ${reviewId} not found`);
+    }
+
+    item.manualNote = note;
+    item.updatedAt = new Date();
+    this.persist();
+    return item;
   }
 }
 
