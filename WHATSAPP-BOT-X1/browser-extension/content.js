@@ -642,6 +642,233 @@
       };
     }
   }
+
+  // ─── Polling de Leads ──────────────────────────────────────
+
+  let pollingInterval = null;
+  let highlightedLeads = new Set();
+
+  async function fetchLeads() {
+    return new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage(
+          { action: "fetchProxy", url: "http://127.0.0.1:8787/api/leads", method: "GET" },
+          (res) => resolve((res && res.ok && res.data && res.data.leads) ? res.data.leads : [])
+        );
+      } catch { resolve([]); }
+    });
+  }
+
+  function normalizePhone(str) {
+    return String(str || "").replace(/\D/g, "");
+  }
+
+  async function scanAndHighlight() {
+    const leads = await fetchLeads();
+    if (!leads.length) return;
+
+    const leadPhones = new Set(leads.map(l => normalizePhone(l.phone)));
+
+    const rows = document.querySelectorAll('div[role="row"], div[role="listitem"]');
+    for (const row of rows) {
+      const spans = row.querySelectorAll("span");
+      let matched = false;
+
+      for (const span of spans) {
+        const t = normalizePhone(span.textContent);
+        if (t.length >= 8 && leadPhones.has(t)) {
+          matched = true;
+          break;
+        }
+      }
+
+      if (matched) {
+        row.style.borderLeft = "4px solid #25D366";
+        row.style.backgroundColor = "rgba(37,211,102,0.08)";
+      }
+    }
+  }
+
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === "startPolling") {
+      if (!pollingInterval) {
+        pollingInterval = setInterval(scanAndHighlight, 5000);
+        scanAndHighlight(); // roda imediatamente
+      }
+      sendResponse({ ok: true, running: true });
+    } else if (request.action === "stopPolling") {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+        // Remove highlights
+        document.querySelectorAll('div[role="row"], div[role="listitem"]').forEach(r => {
+          r.style.borderLeft = "";
+          r.style.backgroundColor = "";
+        });
+      }
+      sendResponse({ ok: true, running: false });
+    } else if (request.action === "pollingStatus") {
+      sendResponse({ running: !!pollingInterval });
+    }
+    return true;
+  });
+  
+  // ─── Auto-import polling — inicia automaticamente ──────────
+  let autoImportInterval = null;
+  let importedCache = new Set();
+
+  async function autoImportScan() {
+    const rows = document.querySelectorAll('div[role="row"], div[role="listitem"]');
+    for (const row of rows) {
+      const spans = row.querySelectorAll("span");
+      const texts = [];
+      for (const span of spans) {
+        const t = span.textContent.trim();
+        if (t && t.length > 1) texts.push(t);
+      }
+      if (texts.length < 2) continue;
+      // Se texts[0] for badge de notificação, pegar texts[1] como nome
+      let contactName = texts[0];
+      if (/^\d+\s*mensagem/i.test(contactName)) {
+        contactName = texts[1] || "";
+      }
+      // Ignorar nomes de sistema do WhatsApp
+      const NOME_INVALIDO = /^(default-|wa-chat-|wds-ic-|WhatsApp Business$|1\d{15,})/i;
+      if (NOME_INVALIDO.test(contactName)) continue;
+      // Ignorar textos que parecem notificações, não nomes
+      if (/mensagem|não lida|unread|arquivad/i.test(contactName)) continue;
+      // Ignorar se o "nome" for muito curto ou só números grandes
+      if (contactName.length < 2) continue;
+      
+      let lastMessage = texts[texts.length - 1];
+      // Ignorar previews que são ícones de status de envio
+      if (/^(msg-dblcheck|msg-check|tail-in|tail-out|ic-|status-)/.test(lastMessage)) continue;
+      if (lastMessage.length > 200) continue;
+      // Ignorar se lastMessage parece horário ou número puro
+      if (/^\d{1,2}:\d{2}$/.test(lastMessage)) continue;
+      if (/^\d{10,}$/.test(lastMessage)) continue;
+      if (/^Você:/i.test(lastMessage)) lastMessage = texts[texts.length - 2] || "";
+      if (!lastMessage || lastMessage === contactName) continue;
+      const cacheKey = `${contactName}::${lastMessage}`;
+      if (importedCache.has(cacheKey)) continue;
+      importedCache.add(cacheKey);
+      try {
+        chrome.runtime.sendMessage({
+          action: "fetchProxy",
+          url: "http://127.0.0.1:8787/api/inbox/import",
+          method: "POST",
+          body: { contactName, contactPhone: "", lastMessage, receivedAt: new Date().toISOString() },
+        });
+      } catch { /* extensão recarregando */ }
+    }
+  }
+
+  // Inicia automaticamente ao carregar a página
+  autoImportInterval = setInterval(autoImportScan, 5000);
+  autoImportScan(); // roda imediatamente
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === "startAutoImport") {
+      if (!autoImportInterval) {
+        autoImportInterval = setInterval(autoImportScan, 5000);
+        autoImportScan();
+      }
+      sendResponse({ ok: true });
+    } else if (request.action === "stopAutoImport") {
+      clearInterval(autoImportInterval);
+      autoImportInterval = null;
+      importedCache.clear();
+      sendResponse({ ok: true });
+    }
+    return true;
+  });
+
+  // ─── Injetar texto na conversa por telefone ────────────────
+  async function openConversationAndInject(phone, text) {
+    const digits = phone.replace(/\D/g, "");
+    console.log('[INJECT] iniciando para:', digits, 'texto:', text.slice(0,20));
+
+    const input = document.querySelector('input[aria-label="Pesquisar ou começar uma nova conversa"]');
+    console.log('[INJECT] input encontrado:', !!input);
+    if (!input) return { ok: false, error: "Campo de busca não encontrado." };
+
+    input.focus();
+    input.click();
+    await new Promise(r => setTimeout(r, 300));
+
+    // 2. Limpa e digita o número
+    input.value = "";
+    document.execCommand("insertText", false, digits);
+    await new Promise(r => setTimeout(r, 1500));
+
+    // 3. Clica no primeiro resultado
+    // Aguarda resultados renderizarem
+    await new Promise(r => setTimeout(r, 1500));
+    const allResults = document.querySelectorAll('div[role="listitem"], div[role="row"]');
+    
+    let firstResult = null;
+    for (let i = 0; i < allResults.length; i++) {
+      const txt = allResults[i].textContent.replace(/\D/g,'');
+      if (txt.includes(digits.slice(-8))) {
+        firstResult = allResults[i];
+        break;
+      }
+    }
+    // Fallback: pega o segundo elemento (índice 1) se não achou pelo número
+    if (!firstResult && allResults.length > 1) {
+      firstResult = allResults[1];
+    }
+
+    if (!firstResult) {
+      // Limpa busca e sai
+      input.value = "";
+      document.execCommand("selectAll", false, null);
+      document.execCommand("delete", false, null);
+      return { ok: false, error: "Nenhum resultado encontrado para " + digits };
+    }
+
+    console.log('[INJECT] firstResult:', firstResult ? firstResult.textContent.slice(0,50) : 'null');
+
+    // Clica na conversa
+    firstResult.click();
+
+    // Limpa o campo de busca
+    await new Promise(r => setTimeout(r, 300));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+
+    // Aguarda a conversa NOVA carregar verificando o aria-label do box
+    let box = null;
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 200));
+      const candidate = document.querySelector('[data-testid="conversation-compose-box-input"]');
+      if (candidate && candidate.getAttribute('aria-label') && candidate.getAttribute('aria-label').includes(digits.slice(-8))) {
+        box = candidate;
+        break;
+      }
+    }
+    // Fallback: pega qualquer box disponível
+    if (!box) {
+      await new Promise(r => setTimeout(r, 1000));
+      box = document.querySelector('[data-testid="conversation-compose-box-input"]');
+    }
+    if (!box) return { ok: false, error: "Campo de texto não encontrado." };
+
+    await new Promise(r => setTimeout(r, 200));
+    console.log('[INJECT] box encontrado:', !!box, box ? box.getAttribute('aria-label') : '');    
+    box.focus();
+    box.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }));
+    document.execCommand('insertText', false, text);
+
+    return { ok: true };
+  }
+
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === "injectText") {
+      openConversationAndInject(request.phone, request.text)
+        .then(sendResponse);
+      return true;
+    }
+  });
+
 })();
 
 

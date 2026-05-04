@@ -107,23 +107,15 @@
 
   async function findWATab() {
     const tabs = await chrome.tabs.query({
-      active: true,
-      currentWindow: true,
+      url: "https://web.whatsapp.com/*"
     });
 
-    const waTab = tabs.find(
-      (tab) => tab.url && tab.url.startsWith("https://web.whatsapp.com")
-    );
-
-    if (!waTab || !waTab.id) {
-      setStatus(
-        "error",
-        "❌ Nenhuma aba do WhatsApp Web encontrada. Abra o WhatsApp Web e tente novamente."
-      );
+    if (!tabs.length || !tabs[0].id) {
+      setStatus("error", "❌ WhatsApp Web não encontrado. Abra em alguma aba.");
       return null;
     }
 
-    return waTab;
+    return tabs[0];
   }
 
   // ─── Capturar (conversa aberta) ────────────────────────────
@@ -352,4 +344,30 @@
       setStatus("idle", "ℹ️ Abra o WhatsApp Web em outra aba e clique em uma conversa.");
     }
   });
+
+  // Toggle polling
+  const btnPolling = document.getElementById("btnPolling");
+
+  // Verificar estado ao abrir
+  chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+    const waTab = tabs.find(t => t.url && t.url.startsWith("https://web.whatsapp.com"));
+    if (!waTab) return;
+    const res = await chrome.tabs.sendMessage(waTab.id, { action: "pollingStatus" });
+    if (res && res.running) btnPolling.textContent = "🟢 Leads ON";
+  });
+
+  btnPolling.addEventListener("click", async () => {
+    console.log("clicou polling");
+    const waTab = await findWATab();
+    console.log("waTab:", waTab);
+    if (!waTab) return;
+    const status = await chrome.tabs.sendMessage(waTab.id, { action: "pollingStatus" });
+    console.log("status:", status);
+    const isRunning = status && status.running;
+    const action = isRunning ? "stopPolling" : "startPolling";
+    const res = await chrome.tabs.sendMessage(waTab.id, { action });
+    console.log("res:", res);
+    btnPolling.textContent = isRunning ? "⚪ Leads OFF" : "🟢 Leads ON";
+  });
+  
 })();

@@ -3,11 +3,14 @@
   "name": "Copiloto WhatsApp",
   "version": "1.0.0",
   "description": "Captura dados da conversa aberta no WhatsApp Web e envia para o painel Copiloto local.",
-  "permissions": ["activeTab"],
+  "permissions": ["tabs"],
   "host_permissions": [
     "https://web.whatsapp.com/*",
     "http://127.0.0.1:8787/*"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": ["https://web.whatsapp.com/*"],

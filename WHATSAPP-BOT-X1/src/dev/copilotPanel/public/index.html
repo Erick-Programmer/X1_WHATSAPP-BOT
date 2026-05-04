@@ -489,6 +489,22 @@ function getFilterCounts(reviews) {
   };
 }
 
+async function injectWhatsApp(reviewId, suggestionId, phone) {
+  const reviews = await api('GET', '/api/reviews');
+  const review = reviews.find(r => r.id === reviewId);
+  if (!review) return;
+  const suggestion = review.suggestions.find(s => s.id === suggestionId);
+  if (!suggestion) return;
+
+  const response = await fetch('http://127.0.0.1:8787/api/inject-whatsapp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone, text: suggestion.text })
+  });
+  const result = await response.json();
+  if (!result.ok) alert('Erro: ' + result.error);
+}
+
 function renderFilterCounts(reviews) {
   var counts = getFilterCounts(reviews || []);
   var activeBtn = document.querySelector('.fb-btn[data-filter="active"]');
@@ -559,6 +575,7 @@ function renderPendingSection(review, group) {
         '<div class="flex" style="margin-top:6px;">' +
           '<button class="btn btn-secondary" onclick="copySuggestion(\'' + review.id + '\',\'' + s.id + '\')">Copiar</button>';
       if (hasValidPhone) {
+        html += '<button class="btn btn-success" onclick="injectWhatsApp(\'' + review.id + '\',\'' + s.id + '\',\'' + contactPhoneDigits + '\')">📲 Injetar no WhatsApp</button>';
         html += '<button class="btn btn-info" onclick="openWhatsApp(\'' + review.id + '\',\'' + s.id + '\')">Abrir WhatsApp com texto</button>';
       }
       html += '<button class="btn btn-success" onclick="manualSent(\'' + review.id + '\',\'' + s.id + '\')">Registrar envio manual</button>' +
@@ -570,6 +587,7 @@ function renderPendingSection(review, group) {
   html += '<div class="ps-actions">' +
     '<button class="btn btn-warning" onclick="regenerate(\'' + review.id + '\')">Gerar outras 3</button>' +
     '<button class="btn btn-danger" onclick="cancelReview(\'' + review.id + '\')">Cancelar</button>' +
+    '<button class="btn btn-danger" onclick="deleteReview(\'' + review.id + '\')">🗑️ Excluir</button>' +
   '</div>';
   html += '<details style="margin-top:8px;font-size:0.8rem;">' +
     '<summary style="cursor:pointer;color:#666;">Testes técnicos / API futura</summary>' +
@@ -1153,11 +1171,60 @@ async function handleResetCommercial() {
   } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
 }
 
+async function importLeads() {
+  var rawText = document.getElementById('leadImportText').value;
+  var msgEl = document.getElementById('leadImportMsg');
+  msgEl.textContent = ''; msgEl.className = 'success-msg';
+  if (!rawText.trim()) { msgEl.className = 'error-msg'; msgEl.textContent = 'Cole os números antes de importar.'; return; }
+  try {
+    var result = await api('POST', '/api/leads/import', { rawText: rawText });
+    leadsState = { total: result.total, leads: result.leads };
+    msgEl.textContent = 'Importados: ' + result.imported + ' | Atualizados: ' + result.updated + ' | Total: ' + result.total;
+    document.getElementById('leadImportText').value = '';
+    renderLeadsList(leadsState);
+  } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+}
+
+async function loadLeads() {
+  var msgEl = document.getElementById('leadImportMsg');
+  try {
+    var result = await api('GET', '/api/leads');
+    leadsState = { total: result.total, leads: result.leads };
+    msgEl.textContent = 'Lista atualizada: ' + result.total + ' leads.';
+    renderLeadsList(leadsState);
+  } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro ao carregar: ' + e.message; }
+}
+
+function renderLeadsList(state) {
+  var container = document.getElementById('leadsContent');
+  if (!state || !state.leads || state.leads.length === 0) {
+    container.innerHTML = '<div class="empty" style="margin-top:8px;">Nenhum lead importado.</div>';
+    return;
+  }
+  var html = '<div class="lead-summary"><span class="lead-chip">' + state.total + ' leads</span></div>';
+  html += '<div class="lead-list-preview">';
+  var preview = state.leads.slice(0, 50);
+  for (var i = 0; i < preview.length; i++) {
+    html += '<div>+' + escapeHtml(preview[i].phone) + '</div>';
+  }
+  if (state.leads.length > 50) {
+    html += '<div style="color:#999;">... e mais ' + (state.leads.length - 50) + '</div>';
+  }
+  html += '</div>';
+  container.innerHTML = html;
+}
+
 async function init() {
   await Promise.all([ loadReviews(), loadStats(), loadRuntime(), loadCredentials(), loadCommercial() ]);
   setInterval(async function() {
     await Promise.all([ loadReviews(), loadStats(), loadRuntime() ]);
-  }, 10000);
+  }, 5000);
+}
+
+async function deleteReview(reviewId) {
+  if (!confirm('Excluir este atendimento?')) return;
+  await api('DELETE', '/api/reviews/' + reviewId);
+  await loadReviews();
 }
 
 init();

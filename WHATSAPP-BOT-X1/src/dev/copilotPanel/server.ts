@@ -10,6 +10,9 @@ import { commercialSettings } from "../../services/commercialSettings";
 import { commercialConfig } from "../../config/commercial";
 import { leadStore, normalizePhone, looksLikePhone } from "../../services/leadStore";
 
+// No topo do server.ts, após os imports:
+let pendingInject: { phone: string; text: string } | null = null;
+
 const PORT = parseInt(process.env.COPILOT_PANEL_PORT || "8787", 10);
 const HOST = "127.0.0.1";
 
@@ -118,6 +121,15 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       return;
     }
 
+    // DELETE /api/reviews/:id
+    const deleteMatch = url.match(/^\/api\/reviews\/([^/]+)$/);
+    if (method === "DELETE" && deleteMatch) {
+      const reviewId = deleteMatch[1];
+      reviewQueue.cancelReview(reviewId);
+      jsonResponse(res, 200, { reviewId, deleted: true });
+      return;
+    }
+
     // POST /api/inbox/import
     if (method === "POST" && url === "/api/inbox/import") {
       const body = await parseBody(req);
@@ -140,14 +152,25 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       }
       const importedLead = contactPhone ? leadStore.findByPhone(contactPhone) : null;
 
-      // Gerar contactId
+      // Gerar contactId — telefone tem prioridade SEMPRE sobre nome
       let contactId: string;
-      if (contactPhone) {
-        contactId = contactPhone;
-      } else if (rawContactName) {
-        contactId = rawContactName.trim();
+      if (looksLikePhone(contactPhone)) {
+        contactId = contactPhone;  // sempre usa telefone se disponível
       } else {
-        contactId = `unknown_${Date.now()}`;
+        contactId = `unknown_${Date.now()}`;  // nunca usa nome como ID
+      }
+
+      // Rejeitar duplicata: mesmo contactId + mesma mensagem já na fila
+      const existingItems = Array.from(
+        (reviewQueue as unknown as { items: Map<string, unknown> }).items.values()
+      ) as Array<{ contactId: string; customerMessage: string }>;
+
+      const isDuplicate = existingItems.some(
+        (i) => i.contactId === contactId && i.customerMessage === lastMessage
+      );
+      if (isDuplicate) {
+        jsonResponse(res, 200, { skipped: true, reason: "duplicate" });
+        return;
       }
 
       const messageId = `msg_import_${Date.now()}`;
@@ -585,6 +608,25 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       return;
     }
 
+    // POST /api/inject-whatsapp
+    if (method === "POST" && url === "/api/inject-whatsapp") {
+      const body = await parseBody(req);
+      pendingInject = { phone: body.phone as string, text: body.text as string };
+      jsonResponse(res, 200, { ok: true });
+      return;
+    }
+
+    if (method === "GET" && url === "/api/inject-whatsapp/pending") {
+      if (pendingInject) {
+        const payload = pendingInject;
+        pendingInject = null; // consome e limpa
+        jsonResponse(res, 200, { ok: true, ...payload });
+      } else {
+        jsonResponse(res, 200, { ok: false });
+      }
+      return;
+    }
+    
     // ── Static files ──
 
     // Check if index.html exists
