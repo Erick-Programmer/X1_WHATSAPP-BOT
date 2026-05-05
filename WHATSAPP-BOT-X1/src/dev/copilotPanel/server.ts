@@ -12,6 +12,18 @@ import { leadStore, normalizePhone, looksLikePhone } from "../../services/leadSt
 import * as dotenv from "dotenv";
 dotenv.config();
 
+// ─── Approved Responses (few-shot) ──────────────────────────
+const APPROVED_FILE = path.resolve(process.cwd(), "data", "approved-responses.json");
+
+function saveApprovedResponse(intent: string, text: string): void {
+  let list: Array<{ intent: string; text: string; injectedAt: string }> = [];
+  if (fs.existsSync(APPROVED_FILE)) {
+    try { list = JSON.parse(fs.readFileSync(APPROVED_FILE, "utf-8")); } catch { list = []; }
+  }
+  list.push({ intent, text, injectedAt: new Date().toISOString() });
+  fs.writeFileSync(APPROVED_FILE, JSON.stringify(list, null, 2), "utf-8");
+}
+
 // No topo do server.ts, após os imports:
 let pendingInject: { phone: string; text: string } | null = null;
 
@@ -654,6 +666,12 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     if (method === "POST" && url === "/api/inject-whatsapp") {
       const body = await parseBody(req);
       pendingInject = { phone: body.phone as string, text: body.text as string };
+
+      // Salva resposta aprovada para few-shot
+      if (body.intent && body.text) {
+        saveApprovedResponse(body.intent as string, body.text as string);
+      }
+
       jsonResponse(res, 200, { ok: true });
       return;
     }

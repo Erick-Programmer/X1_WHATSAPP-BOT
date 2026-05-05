@@ -59,10 +59,11 @@ const hasRecentSent = (existingItems as any[]).some(
 **Fix:** `max-height: 45vh` → `65vh`. `force-scroll` de `height: 120px` → `min-height: 120px`.
 
 ## Próximo foco
-1. **[TESTE]** npm run build + testar simulação como cliente no painel
-2. **[CONFIG]** Preencher `.env` com preço + link Cakto
-3. **[ETAPA 2]** Integrar DeepSeek: passar `productKnowledge` + últimas 3 mensagens do cliente para gerar sugestões dinâmicas
-2. **[GO LIVE]** Integração WhatsApp Business API real
+1. **[CUPOM]** Botão "Enviar cupom de recuperação" no painel — chama DeepSeek com contexto da conversa + código do cupom, gera mensagem editável antes de injetar. Aguarda: código do cupom, % desconto e link checkout da Cakto.
+2. **[TESTE]** Continuar simulação para acumular dados reais em `approved-responses.json`
+3. **[GO LIVE]** Integração WhatsApp Business API real
+4. **[ESTILO]** Analisar `approved-responses.json` — extrair palavras e frases mais frequentes por intenção e adicionar como reforço de estilo no prompt do DeepSeek.
+5. **[SCORE]** Calcular score de similaridade entre cada sugestão gerada e as respostas aprovadas em `approved-responses.json` — destacar o card com maior score como "recomendado" no painel.
 
 ## ESTADO DOS ARQUIVOS CRÍTICOS
 
@@ -136,8 +137,19 @@ Produto sendo vendido: **Planner Estudante Pro** — 10 planners + 3 ebooks bôn
 - [x] `replySuggestions.ts` convertido para async com fallback estático
 - [x] `server.ts` atualizado nos 3 pontos de chamada (inbox/import, mock-message, regenerate)
 - [x] `.env` criado com `DEEPSEEK_API_KEY`
+- [x] DeepSeek integrado e funcionando com link real da Cakto
+- [x] `buy_intent` corrigido: manda link direto sem justificar preço
+- [x] `objection_expensive` corrigido: sem autoelogio
+- [x] `commercialSettings` substituindo `commercialConfig` no prompt do DeepSeek
+- [x] Simulação real via WhatsApp validada — respostas humanas e contextuais
+- [x] `data/approved-responses.json` — salva intenção + texto injetado (few-shot)
+- [x] `deepseekSuggestions.ts` — lê últimos 3 exemplos aprovados por intenção e injeta no prompt
+- [x] `index.html` — textarea editável por sugestão antes de injetar
+- [x] `index.html` — `injectWhatsAppEdited` usa texto editado + grava no few-shot
+- [x] `index.html` — polling pausado com `isEditing` enquanto usuário edita textarea
+- [x] `index.html` — sugestões lado a lado (grid 3 colunas)
 
 ---
 
-**Atualizado em:** 2026-05-04  
+**Atualizado em:** 2026-05-05
 **QA:** Claude Sonnet 4.6

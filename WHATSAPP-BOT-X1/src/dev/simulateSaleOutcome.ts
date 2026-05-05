@@ -31,7 +31,7 @@ async function simulateSaleOutcome() {
   console.log(`\n🔍 Intenção classificada: ${intentResult.intent} (confiança: ${intentResult.confidence})`);
 
   // Step 3: Generate 3 suggestions
-  const suggestions = generateSuggestions(intentResult.intent);
+  const suggestions = await generateSuggestions(intentResult.intent);
   console.log(`\n💡 Sugestões geradas (${suggestions.length}):`);
   suggestions.forEach((s, i) => {
     const validated = s.validated ? "✅" : "⚠️";

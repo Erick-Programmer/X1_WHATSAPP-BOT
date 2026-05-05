@@ -84,8 +84,9 @@ body {
 .chat-header .ch-meta { font-size: 0.78rem; color: #666; margin-top: 2px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .chat-messages {
   background: #e5ddd5; border-radius: 8px; padding: 14px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1); max-height: 18vh; overflow-y: auto;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow-y: auto;
   display: flex; flex-direction: column; gap: 5px;
+  flex: 1; min-height: 150px; max-height: 150px;
 }
 .chat-messages.force-scroll { min-height: 50px; }
 .chat-message { max-width: 88%; padding: 7px 11px; border-radius: 8px; font-size: 0.82rem; line-height: 1.4; position: relative; }
@@ -143,7 +144,7 @@ input[type="text"] { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4p
 .tag-live-on { background: #d4edda; color: #155724; border: 1px solid #155724; }
 .tag-env-blocked { background: #f8d7da; color: #721c24; border: 1px solid #721c24; }
 .tag-env-allowed { background: #d4edda; color: #155724; border: 1px solid #155724; }
-.suggestion { border: 1px solid #e0e0e0; border-radius: 4px; padding: 8px; margin-bottom: 6px; }
+.suggestion { border: 1px solid #e0e0e0; border-radius: 4px; padding: 14px; margin-bottom: 6px; }
 .suggestion-text { font-size: 0.82rem; margin-bottom: 4px; color: #333; }
 .suggestion-meta { font-size: 0.72rem; color: #666; margin-bottom: 4px; }
 .reminder { font-size: 0.72rem; color: #856404; background: #fef3cd; padding: 3px 7px; border-radius: 3px; margin-top: 4px; }
@@ -183,6 +184,7 @@ input[type="text"] { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4p
 .lead-list-preview { max-height: 150px; overflow-y: auto; border: 1px solid #eee; border-radius: 4px; padding: 6px; font-size: 0.78rem; background: #fafafa; }
 .lead-list-preview div { padding: 2px 0; border-bottom: 1px solid #f1f1f1; }
 .lead-list-preview div:last-child { border-bottom: none; }
+.suggestions-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 </style>
 </head>
 <body>
@@ -304,6 +306,7 @@ let showCredentialsForm = false;
 let commercialState = null;
 let showCommercialForm = false;
 let leadsState = { total: 0, leads: [] };
+let isEditing = false;
 
 function toggleAdminPanel(panelId) {
   const panel = document.getElementById(panelId);
@@ -521,12 +524,33 @@ async function injectWhatsApp(reviewId, suggestionId, phone) {
   const response = await fetch('http://127.0.0.1:8787/api/inject-whatsapp', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone, text: suggestion.text })
+    body: JSON.stringify({ phone, text: suggestion.text, intent: review.intent })
   });
   const result = await response.json();
   if (!result.ok) { alert('Erro: ' + result.error); return; }
   try { await api('POST', '/api/reviews/' + reviewId + '/manual-sent', { suggestionId }); } catch(e) {}
   await new Promise(r => setTimeout(r, 4000)); // aguarda antes de recarregar
+  await loadReviews();
+}
+
+async function injectWhatsAppEdited(reviewId, suggestionId, phone) {
+  const textarea = document.getElementById('edit-' + reviewId + '-' + suggestionId);
+  const editedText = textarea ? textarea.value.trim() : '';
+  if (!editedText) { alert('Texto vazio.'); return; }
+
+  const reviews = await api('GET', '/api/reviews');
+  const review = reviews.find(r => r.id === reviewId);
+  if (!review) return;
+
+  const response = await fetch('http://127.0.0.1:8787/api/inject-whatsapp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone, text: editedText, intent: review.intent })
+  });
+  const result = await response.json();
+  if (!result.ok) { alert('Erro: ' + result.error); return; }
+  try { await api('POST', '/api/reviews/' + reviewId + '/manual-sent', { suggestionId }); } catch(e) {}
+  await new Promise(r => setTimeout(r, 4000));
   await loadReviews();
 }
 
@@ -596,6 +620,7 @@ function renderPendingSection(review, group) {
   var warningHtml = pendingCount > 1 ? '<div class="ps-warning">⚠️ Existem ' + pendingCount + ' mensagens pendentes. Respondendo à mais recente.</div>' : '';
   var roundLabel = review.suggestionRound ? ' <span style="font-size:0.72rem;color:#666;font-weight:400;">versão ' + review.suggestionRound + '</span>' : '';
   var html = '<div class="pending-section"><div class="ps-title">💬 Sugestões para responder agora' + roundLabel + '</div>' + warningHtml;
+  html += '<div class="suggestions-grid">';
   if (review.suggestions && review.suggestions.length > 0) {
     for (var si = 0; si < review.suggestions.length; si++) {
       var s = review.suggestions[si];
@@ -605,18 +630,20 @@ function renderPendingSection(review, group) {
         '<div class="suggestion-meta">[' + escapeHtml(s.type) + '] QA: ' + validated + '</div>' +
         '<div class="suggestion-text">' + escapeHtml(s.text) + '</div>' +
         (reminder ? '<div class="reminder">' + escapeHtml(reminder) + '</div>' : '') +
+        '<textarea id="edit-' + review.id + '-' + s.id + '" onfocus="isEditing=true" onblur="isEditing=false" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.82rem;min-height:80px;resize:vertical;margin-bottom:5px;">' + escapeHtml(s.text) + '</textarea>' +
         '<div class="flex" style="margin-top:6px;">' +
           '<button class="btn btn-secondary" onclick="copySuggestion(\'' + review.id + '\',\'' + s.id + '\')">Copiar</button>';
       if (hasValidPhone) {
-        html += '<button class="btn btn-success" onclick="injectWhatsApp(\'' + review.id + '\',\'' + s.id + '\',\'' + contactPhoneDigits + '\')">📲 Injetar no WhatsApp</button>';
+        html += '<button class="btn btn-success" onclick="injectWhatsAppEdited(\'' + review.id + '\',\'' + s.id + '\',\'' + contactPhoneDigits + '\')">📲 Injetar no WhatsApp</button>';
         html += '<button class="btn btn-info" onclick="openWhatsApp(\'' + review.id + '\',\'' + s.id + '\')">Abrir WhatsApp com texto</button>';
       }
       html += '<button class="btn btn-success" onclick="manualSent(\'' + review.id + '\',\'' + s.id + '\')">Registrar envio manual</button>' +
         '</div>' +
         '<div id="copy-' + review.id + '-' + s.id + '" class="success-msg" style="display:none;">Copiado!</div>' +
-      '</div>';
+      '</div>';   // fecha .suggestion
     }
   }
+  html += '</div>'; // fecha .suggestions-grid
   html += '<div class="ps-actions">' +
     '<button class="btn btn-warning" onclick="regenerate(\'' + review.id + '\')">Gerar outras 3</button>' +
     '<button class="btn btn-danger" onclick="cancelReview(\'' + review.id + '\')">Cancelar</button>' +
@@ -1254,12 +1281,11 @@ function renderLeadsList(state) {
   container.innerHTML = html;
 }
 
-async function init() {
-  await Promise.all([ loadReviews(), loadStats(), loadRuntime(), loadCredentials(), loadCommercial() ]);
-  setInterval(async function() {
+setInterval(async function() {
+  if (!isEditing) {
     await Promise.all([ loadReviews(), loadStats(), loadRuntime() ]);
-  }, 5000);
-}
+  }
+}, 5000);
 
 async function deleteReview(reviewId) {
   if (!confirm('Excluir este atendimento?')) return;

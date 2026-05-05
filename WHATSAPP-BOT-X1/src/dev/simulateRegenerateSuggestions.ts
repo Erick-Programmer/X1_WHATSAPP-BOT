@@ -31,7 +31,7 @@ async function simulateRegenerateSuggestions() {
   console.log(`\n🔍 Intenção classificada: ${intentResult.intent} (confiança: ${intentResult.confidence})`);
 
   // Step 3: Generate 3 suggestions (round 1)
-  const round1 = generateSuggestions(intentResult.intent, 1);
+  const round1 = await generateSuggestions(intentResult.intent, 1);
   console.log(`\n💡 Sugestões iniciais — Round 1 (${round1.length}):`);
   round1.forEach((s, i) => {
     const validated = s.validated ? "✅" : "⚠️";
@@ -54,7 +54,7 @@ async function simulateRegenerateSuggestions() {
   console.log(`\n👤 Usuário: "não gostei, gerar outras 3"`);
 
   // Step 6: Generate round 2 and replace suggestions
-  const round2 = generateSuggestions(intentResult.intent, 2);
+  const round2 = await generateSuggestions(intentResult.intent, 2);
   console.log(`\n💡 Novas sugestões — Round 2 (${round2.length}):`);
   round2.forEach((s, i) => {
     const validated = s.validated ? "✅" : "⚠️";
