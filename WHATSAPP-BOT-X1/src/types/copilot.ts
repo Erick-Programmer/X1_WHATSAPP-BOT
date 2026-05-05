@@ -14,6 +14,9 @@ export interface ReplySuggestion {
   type: SuggestionType;
   text: string;
   validated: boolean;
+  score?: number;
+  scoreLabel?: "recomendada" | "boa" | "teste";
+  scoreReasons?: string[];
   createdAt: Date;
 }
 

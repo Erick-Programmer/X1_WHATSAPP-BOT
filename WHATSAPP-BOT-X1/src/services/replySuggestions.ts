@@ -4,6 +4,7 @@ import { commercialConfig } from "../config/commercial";
 import { productKnowledge } from "../config/product";
 import { validateResponse } from "./qaValidator";
 import { generateSuggestionsDeepSeek } from "./deepseekSuggestions";
+import { commercialSettings } from "./commercialSettings";
 
 function pick(arr: string[], index: number = 0): string {
   return arr[index % arr.length];
@@ -229,4 +230,147 @@ export async function generateSuggestions(
       createdAt: new Date(),
     };
   });
+}
+
+export function generateRecoverySuggestions(round: number = 1): ReplySuggestion[] {
+  const config = commercialSettings.getRecoveryConfig();
+  if (!config.isCheckoutConfigured) {
+    throw new Error("Checkout de recuperacao ainda nao esta aprovado.");
+  }
+
+  const price = config.price;
+  const checkoutUrl = config.checkoutUrl;
+  const texts = [
+    [
+      `Consigo liberar uma condicao menor para voce finalizar agora: ${price}.\n\nPode finalizar por aqui: ${checkoutUrl}`,
+      `Se ainda fizer sentido para voce, deixei uma opcao especial por ${price} para acessar o pacote completo.\n\nLink: ${checkoutUrl}`,
+      `Para facilitar sua decisao, consigo deixar o Planner Estudante Pro por ${price} nessa condicao especial.\n\nPode finalizar por aqui: ${checkoutUrl}`,
+    ],
+    [
+      `Consegui uma condicao especial para voce: o pacote completo fica ${price}.\n\nAqui esta o link para finalizar: ${checkoutUrl}`,
+      `Se o valor normal pesou um pouco, posso liberar esta opcao por ${price}.\n\nLink de acesso: ${checkoutUrl}`,
+      `Pra te ajudar a decidir, deixei o acesso ao Planner Estudante Pro por ${price}.\n\nFinaliza por aqui: ${checkoutUrl}`,
+    ],
+    [
+      `Posso te passar uma condicao menor agora: ${price} pelo pacote completo.\n\nLink: ${checkoutUrl}`,
+      `Deixei uma alternativa mais leve para voce finalizar: ${price}.\n\nPode acessar por aqui: ${checkoutUrl}`,
+      `Se quiser aproveitar, consigo liberar o Planner Estudante Pro por ${price} nesta condicao.\n\nCheckout: ${checkoutUrl}`,
+    ],
+  ];
+
+  const selected = texts[(Math.max(round, 1) - 1) % texts.length];
+  const types: SuggestionType[] = ["direct", "explanatory", "human"];
+
+  return selected.map((text, index) => {
+    const response = [{ type: "text" as const, content: text }];
+    const validation = validateResponse(response);
+    return {
+      id: crypto.randomUUID(),
+      type: types[index],
+      text,
+      validated: validation.approved,
+      createdAt: new Date(),
+    };
+  });
+}
+
+export function generateFlowContinuationSuggestions(
+  stage: string = "auto",
+  round: number = 1
+): ReplySuggestion[] {
+  const config = commercialSettings.getEffectiveConfig();
+  const price = config.price;
+  const checkout = config.isCheckoutConfigured ? config.checkoutUrl : "";
+  const templates: Record<string, string[][]> = {
+    presentation: [
+      [
+        "Posso te mostrar rapidinho o que vem dentro do Planner Estudante Pro?",
+        "O Planner Estudante Pro foi feito para organizar estudos, provas, rotina e metas. Quer que eu te mostre o pacote?",
+        "Se quiser, te mostro em poucas mensagens o que vem no material e como funciona o acesso.",
+      ],
+    ],
+    product: [
+      [
+        "O pacote vem com 10 planners digitais em PDF e 3 ebooks bonus. Ele ajuda a organizar rotina, provas, tarefas e metas.",
+        "Dentro do pacote tem planners com estilos diferentes e ebooks para organizacao, estudos e projetos. Tudo em PDF.",
+        "Ele foi pensado para estudante escolher o estilo que combina mais e usar para rotina de estudos, provas e metas.",
+      ],
+    ],
+    price: [
+      [
+        checkout
+          ? `O pacote completo fica ${price}. Se quiser finalizar, pode acessar por aqui: ${checkout}`
+          : `O pacote completo fica ${price}. Se quiser, te passo o acesso por aqui.`,
+        checkout
+          ? `O valor do Planner Estudante Pro e ${price}. Aqui esta o link para finalizar: ${checkout}`
+          : `O valor do Planner Estudante Pro e ${price}. Posso te passar o proximo passo.`,
+        checkout
+          ? `Fica ${price} pelo pacote com 10 planners e 3 ebooks. Pode finalizar por aqui: ${checkout}`
+          : `Fica ${price} pelo pacote com 10 planners e 3 ebooks. Me avisa que te passo o acesso.`,
+      ],
+    ],
+    followup: [
+      [
+        "Passando so para saber se ficou alguma duvida sobre o Planner Estudante Pro.",
+        "Conseguiu ver direitinho? Se tiver alguma duvida sobre o acesso ou o que vem no pacote, pode me chamar.",
+        "Fiquei por aqui caso queira tirar alguma duvida antes de decidir.",
+      ],
+    ],
+    close: [
+      [
+        checkout
+          ? `Quer que eu te envie o link para finalizar agora? O pacote completo fica ${price}.`
+          : `Quer que eu te passe o proximo passo para acessar o pacote? O valor fica ${price}.`,
+        checkout
+          ? `Se fizer sentido para voce, posso te mandar o checkout agora. Fica ${price}.`
+          : `Se fizer sentido para voce, te explico como acessar. Fica ${price}.`,
+        checkout
+          ? `Quer garantir o acesso ao pacote completo? Posso te passar o link agora.`
+          : `Quer garantir o acesso ao pacote completo? Posso te passar as informacoes agora.`,
+      ],
+    ],
+  };
+
+  const normalizedStage = templates[stage] ? stage : "followup";
+  const selected = templates[normalizedStage][(Math.max(round, 1) - 1) % templates[normalizedStage].length];
+  const types: SuggestionType[] = ["direct", "explanatory", "human"];
+
+  return selected.map((text, index) => {
+    const response = [{ type: "text" as const, content: text }];
+    const validation = validateResponse(response);
+    return {
+      id: crypto.randomUUID(),
+      type: types[index],
+      text,
+      validated: validation.approved,
+      createdAt: new Date(),
+    };
+  });
+}
+
+export async function generateFlowContinuationSuggestionsSmart(
+  stage: string = "followup",
+  history: string[] = [],
+  round: number = 1
+): Promise<ReplySuggestion[]> {
+  const stagePromptMap: Record<string, string> = {
+    presentation: "Continue a venda apresentando o Planner Estudante Pro de forma natural e curta.",
+    product: "Continue a venda mostrando o que vem no pacote: 10 planners digitais e 3 ebooks bonus.",
+    price: "Continue a venda falando o valor normal e o checkout, sem oferecer recuperacao nem desconto.",
+    close: "Continue a venda pedindo fechamento de forma leve, humana e objetiva.",
+    followup: "Continue a conversa com um follow-up natural para tirar duvida e retomar interesse.",
+  };
+  const stagePrompt = stagePromptMap[stage] || stagePromptMap.followup;
+  const aiHistory = [
+    ...history.slice(-6),
+    `Tarefa do vendedor: ${stagePrompt}`,
+    "Gere 3 opcoes curtas, humanas e prontas para WhatsApp. Nao invente desconto. Nao fale em equipe ou suporte.",
+  ];
+
+  const aiSuggestions = await generateSuggestionsDeepSeek(Intent.Unknown, aiHistory, round);
+  if (aiSuggestions && aiSuggestions.length === 3) {
+    return aiSuggestions;
+  }
+
+  return generateFlowContinuationSuggestions(stage, round);
 }

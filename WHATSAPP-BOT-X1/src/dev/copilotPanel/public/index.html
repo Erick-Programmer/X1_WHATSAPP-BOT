@@ -99,6 +99,10 @@ body {
 .pending-section .ps-title { font-size: 0.82rem; font-weight: 700; color: #856404; margin-bottom: 6px; }
 .pending-section .ps-warning { font-size: 0.72rem; color: #856404; background: #fef3cd; padding: 3px 7px; border-radius: 3px; margin-bottom: 6px; }
 .pending-section .ps-actions { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+.pending-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; }
+.pending-item { border: 1px solid #eee; border-radius: 6px; padding: 6px; background: #fafafa; font-size: 0.76rem; }
+.pending-item.active { border-color: #0f3460; background: #f0f4ff; }
+.pending-item-actions { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 5px; }
 .no-pending { background: #fff; border-radius: 8px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center; color: #999; font-size: 0.82rem; }
 .lead-status-compact { background: #fff; border-radius: 8px; padding: 10px 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 6px; }
 .lead-status-compact select { padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.78rem; width: 100%; }
@@ -145,8 +149,14 @@ input[type="text"] { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4p
 .tag-env-blocked { background: #f8d7da; color: #721c24; border: 1px solid #721c24; }
 .tag-env-allowed { background: #d4edda; color: #155724; border: 1px solid #155724; }
 .suggestion { border: 1px solid #e0e0e0; border-radius: 4px; padding: 14px; margin-bottom: 6px; }
+.suggestion.recommended { border-color: #1e7e34; box-shadow: 0 0 0 2px rgba(30,126,52,0.12); background: #fbfffc; }
 .suggestion-text { font-size: 0.82rem; margin-bottom: 4px; color: #333; }
 .suggestion-meta { font-size: 0.72rem; color: #666; margin-bottom: 4px; }
+.score-badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 0.68rem; font-weight: 700; margin-left: 4px; }
+.score-recomendada { background: #d4edda; color: #155724; border: 1px solid #155724; }
+.score-boa { background: #cce5ff; color: #004085; border: 1px solid #004085; }
+.score-teste { background: #e2e3e5; color: #383d41; border: 1px solid #6c757d; }
+.score-reasons { font-size: 0.68rem; color: #155724; margin: 3px 0 5px; }
 .reminder { font-size: 0.72rem; color: #856404; background: #fef3cd; padding: 3px 7px; border-radius: 3px; margin-top: 4px; }
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
 .stat-item { text-align: center; }
@@ -184,6 +194,11 @@ input[type="text"] { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4p
 .lead-list-preview { max-height: 150px; overflow-y: auto; border: 1px solid #eee; border-radius: 4px; padding: 6px; font-size: 0.78rem; background: #fafafa; }
 .lead-list-preview div { padding: 2px 0; border-bottom: 1px solid #f1f1f1; }
 .lead-list-preview div:last-child { border-bottom: none; }
+.campaign-box { margin-top: 10px; padding: 10px; border: 1px solid #e6e6e6; border-radius: 8px; background: #fff; }
+.campaign-row { display: grid; grid-template-columns: repeat(3, minmax(70px, 1fr)); gap: 6px; margin-bottom: 6px; }
+.campaign-progress { height: 8px; background: #e9ecef; border-radius: 999px; overflow: hidden; margin: 6px 0; }
+.campaign-progress-bar { height: 100%; background: #1e7e34; width: 0%; transition: width 0.2s ease; }
+.queue-box { margin-top: 10px; padding: 10px; border: 1px solid #e6e6e6; border-radius: 8px; background: #fff; }
 .suggestions-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 </style>
 </head>
@@ -249,9 +264,39 @@ input[type="text"] { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4p
       <div class="flex">
         <button class="btn btn-primary" onclick="importLeads()">Importar leads</button>
         <button class="btn btn-secondary" onclick="loadLeads()">Atualizar lista</button>
+        <button class="btn btn-danger" onclick="clearLeads()">Limpar leads</button>
       </div>
       <div id="leadImportMsg" class="success-msg"></div>
       <div id="leadsContent"></div>
+      <div class="campaign-box">
+        <div style="font-weight:700;color:#0f3460;margin-bottom:6px;">Campanha inicial controlada</div>
+        <label>Mensagem inicial</label>
+        <textarea id="campaignMessage" placeholder="Oi, tudo bem? Tenho um material digital chamado Planner Estudante Pro..."></textarea>
+        <div class="campaign-row">
+          <div><label>Limite</label><input type="number" id="campaignLimit" value="50" min="1" max="500"></div>
+          <div><label>Delay mín. (s)</label><input type="number" id="campaignMinDelay" value="45" min="5"></div>
+          <div><label>Delay máx. (s)</label><input type="number" id="campaignMaxDelay" value="120" min="5"></div>
+        </div>
+        <div class="flex">
+          <button class="btn btn-primary" onclick="prepareCampaign()">Preparar campanha</button>
+          <button class="btn btn-success" onclick="startCampaign()">Iniciar envio</button>
+          <button class="btn btn-warning" onclick="pauseCampaign()">Pausar</button>
+          <button class="btn btn-danger" onclick="cancelCampaign()">Cancelar</button>
+          <button class="btn btn-danger" onclick="clearCampaign()">Limpar fila</button>
+          <button class="btn btn-secondary" onclick="loadCampaign()">Atualizar</button>
+        </div>
+        <div id="campaignMsg" class="success-msg"></div>
+        <div id="campaignContent"></div>
+      </div>
+      <div class="queue-box">
+        <div style="font-weight:700;color:#0f3460;margin-bottom:6px;">Fila real de envio</div>
+        <div class="flex">
+          <button class="btn btn-secondary" onclick="loadInjectionQueue()">Atualizar fila</button>
+          <button class="btn btn-danger" onclick="clearFinishedInjectionQueue()">Limpar finalizados</button>
+        </div>
+        <div id="injectionQueueMsg" class="success-msg"></div>
+        <div id="injectionQueueContent"></div>
+      </div>
     </div>
   </div>
 
@@ -306,6 +351,8 @@ let showCredentialsForm = false;
 let commercialState = null;
 let showCommercialForm = false;
 let leadsState = { total: 0, leads: [] };
+let campaignState = null;
+let injectionQueueState = null;
 let isEditing = false;
 
 function toggleAdminPanel(panelId) {
@@ -332,7 +379,7 @@ function toggleAdminPanel(panelId) {
   currentAdminPanel = panelId;
   if (panelId === 'credsPanel') loadCredentials();
   if (panelId === 'commercialPanel') loadCommercial();
-  if (panelId === 'leadsPanel') loadLeads();
+  if (panelId === 'leadsPanel') { loadLeads(); loadCampaign(); loadInjectionQueue(); }
 }
 
 function setFilter(mode) {
@@ -624,18 +671,41 @@ function renderPendingSection(review, group) {
   if (review.status !== 'pending_review') return '';
   var contactPhoneDigits = getReviewPhoneDigits(review);
   var hasValidPhone = contactPhoneDigits.length >= 10;
-  var pendingCount = group.filter(function(r) { return r.status === 'pending_review'; }).length;
-  var warningHtml = pendingCount > 1 ? '<div class="ps-warning">⚠️ Existem ' + pendingCount + ' mensagens pendentes. Respondendo à mais recente.</div>' : '';
+  var pendingReviews = group.filter(function(r) { return r.status === 'pending_review'; });
+  var pendingCount = pendingReviews.length;
+  var warningHtml = pendingCount > 1 ? '<div class="ps-warning">⚠️ Existem ' + pendingCount + ' mensagens pendentes. Escolha qual responder agora.</div>' : '';
   var roundLabel = review.suggestionRound ? ' <span style="font-size:0.72rem;color:#666;font-weight:400;">versão ' + review.suggestionRound + '</span>' : '';
   var html = '<div class="pending-section"><div class="ps-title">💬 Sugestões para responder agora' + roundLabel + '</div>' + warningHtml;
+  if (pendingCount > 1) {
+    html += '<div class="pending-list">';
+    for (var pi = 0; pi < pendingReviews.length; pi++) {
+      var pending = pendingReviews[pi];
+      html += '<div class="pending-item ' + (pending.id === review.id ? 'active' : '') + '">' +
+        '<div><strong>' + (pending.id === review.id ? 'Respondendo agora: ' : 'Pendente: ') + '</strong>' + escapeHtml(pending.customerMessage || '') + '</div>' +
+        '<div class="pending-item-actions">' +
+          '<button class="btn btn-secondary" onclick="focusPending(\'' + pending.id + '\')">Responder esta</button>' +
+          '<button class="btn btn-warning" onclick="focusPending(\'' + pending.id + '\')">Focar/gerar 3</button>' +
+          '<button class="btn btn-danger" onclick="cancelReview(\'' + pending.id + '\')">Resolver sem responder</button>' +
+        '</div>' +
+      '</div>';
+    }
+    html += '</div>';
+  }
   html += '<div class="suggestions-grid">';
   if (review.suggestions && review.suggestions.length > 0) {
     for (var si = 0; si < review.suggestions.length; si++) {
       var s = review.suggestions[si];
       var validated = s.validated ? 'OK' : 'FALHOU';
       var reminder = getSuggestionReminder(review.intent);
-      html += '<div class="suggestion">' +
-        '<div class="suggestion-meta">[' + escapeHtml(s.type) + '] QA: ' + validated + '</div>' +
+      var score = typeof s.score === 'number' ? s.score : null;
+      var scoreLabel = s.scoreLabel || 'teste';
+      var scoreLabelText = scoreLabel === 'recomendada' ? 'Recomendada' : (scoreLabel === 'boa' ? 'Boa' : 'Teste');
+      var scoreClass = scoreLabel === 'recomendada' ? 'score-recomendada' : (scoreLabel === 'boa' ? 'score-boa' : 'score-teste');
+      var scoreReasons = (s.scoreReasons || []).join(' • ');
+      html += '<div class="suggestion ' + (scoreLabel === 'recomendada' ? 'recommended' : '') + '">' +
+        '<div class="suggestion-meta">[' + escapeHtml(s.type) + '] QA: ' + validated +
+          '<span class="score-badge ' + scoreClass + '">' + scoreLabelText + (score !== null ? ' · ' + score + '/100' : '') + '</span></div>' +
+        (scoreReasons ? '<div class="score-reasons">' + escapeHtml(scoreReasons) + '</div>' : '') +
         '<div class="suggestion-text">' + escapeHtml(s.text) + '</div>' +
         (reminder ? '<div class="reminder">' + escapeHtml(reminder) + '</div>' : '') +
         '<textarea id="edit-' + review.id + '-' + s.id + '" onfocus="isEditing=true" onblur="isEditing=false" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.82rem;min-height:80px;resize:vertical;margin-bottom:5px;">' + escapeHtml(s.text) + '</textarea>' +
@@ -654,6 +724,7 @@ function renderPendingSection(review, group) {
   html += '</div>'; // fecha .suggestions-grid
   html += '<div class="ps-actions">' +
     '<button class="btn btn-warning" onclick="regenerate(\'' + review.id + '\')">Gerar outras 3</button>' +
+    '<button class="btn btn-warning" onclick="generateRecovery(\'' + review.id + '\')">Recuperar com R$ 17</button>' +
     '<button class="btn btn-danger" onclick="cancelReview(\'' + review.id + '\')">Cancelar</button>' +
     '<button class="btn btn-danger" onclick="deleteReview(\'' + review.id + '\')">🗑️ Excluir</button>' +
   '</div>';
@@ -673,7 +744,22 @@ function renderNoPendingSection(group) {
   var html = '<div class="no-pending">✅ Nenhuma resposta pendente.</div>';
   if (hasAnySale) {
     html += '<div class="no-pending" style="margin-top:8px;border:1px solid #155724;color:#155724;">🏆 Cliente já comprou</div>';
-  } else if (sentWithoutOutcome) {
+  } else {
+    var contactId = group[0] ? group[0].contactId : '';
+    html += '<div class="pending-section" style="margin-top:8px;">' +
+      '<div class="ps-title">➡️ Continuar fluxo manual</div>' +
+      '<div style="font-size:0.76rem;color:#666;margin-bottom:6px;">Use quando o cliente nao respondeu e voce quer avancar a conversa.</div>' +
+      '<select id="flowStage-' + escapeHtml(contactId) + '" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;margin-bottom:6px;">' +
+        '<option value="followup">Follow-up / tirar duvida</option>' +
+        '<option value="presentation">Apresentar produto</option>' +
+        '<option value="product">Mostrar o que vem</option>' +
+        '<option value="price">Falar valor normal</option>' +
+        '<option value="close">Pedir fechamento</option>' +
+      '</select>' +
+      '<button class="btn btn-primary" onclick="continueFlow(\'' + encodeURIComponent(contactId) + '\')">Gerar 3 mensagens para continuar</button>' +
+    '</div>';
+  }
+  if (!hasAnySale && sentWithoutOutcome) {
     html += '<div class="pending-section" style="margin-top:8px;">' +
       '<div class="ps-title">📊 Registrar resultado</div>' +
       '<div class="flex" style="margin-top:6px;">' +
@@ -966,6 +1052,58 @@ async function regenerate(reviewId) {
   }
 }
 
+async function generateRecovery(reviewId) {
+  var msgEl = document.getElementById('msg-' + reviewId);
+  if (msgEl) { msgEl.textContent = ''; msgEl.className = 'success-msg'; }
+  if (!confirm('Gerar 3 sugestões usando o checkout de recuperação?')) return;
+  try {
+    await api('POST', '/api/reviews/' + reviewId + '/recovery-suggestions');
+    await loadReviews();
+    var updatedMsgEl = document.getElementById('msg-' + reviewId);
+    if (updatedMsgEl) {
+      updatedMsgEl.className = 'success-msg';
+      updatedMsgEl.textContent = 'Sugestões de recuperação geradas!';
+    }
+  } catch (e) {
+    var errorEl = document.getElementById('msg-' + reviewId);
+    if (errorEl) {
+      errorEl.className = 'error-msg';
+      errorEl.textContent = 'Erro: ' + e.message;
+    } else {
+      alert('Erro: ' + e.message);
+    }
+  }
+}
+
+async function focusPending(reviewId) {
+  var msgEl = document.getElementById('msg-' + reviewId);
+  if (msgEl) { msgEl.textContent = ''; msgEl.className = 'success-msg'; }
+  try {
+    await api('POST', '/api/reviews/' + reviewId + '/focus');
+    await loadReviews();
+    var updatedMsgEl = document.getElementById('msg-' + reviewId);
+    if (updatedMsgEl) {
+      updatedMsgEl.className = 'success-msg';
+      updatedMsgEl.textContent = 'Pendência focada. Sugestões atualizadas.';
+    }
+  } catch (e) {
+    if (msgEl) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+    else { alert('Erro: ' + e.message); }
+  }
+}
+
+async function continueFlow(encodedContactId) {
+  var contactId = decodeURIComponent(encodedContactId);
+  var select = document.getElementById('flowStage-' + contactId);
+  var stage = select ? select.value : 'followup';
+  try {
+    await api('POST', '/api/contacts/' + encodedContactId + '/continue-flow', { stage: stage });
+    await loadReviews();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
 async function markSale(reviewId, sale) {
   var msgEl = document.getElementById('msg-' + reviewId);
   msgEl.textContent = '';
@@ -1177,6 +1315,9 @@ function renderCommercial(state) {
         '<div style="margin-bottom:5px;"><label>Nome do produto</label><input type="text" id="comProductName" placeholder="Planner Estudante Pro" value="' + escapeHtml(state.settings?.productName || '') + '"></div>' +
         '<div style="margin-bottom:5px;"><label>Preço</label><input type="text" id="comPrice" placeholder="R$ 47,00" value="' + escapeHtml(state.settings?.price || '') + '"></div>' +
         '<div style="margin-bottom:5px;"><label>Link de checkout</label><input type="text" id="comCheckoutUrl" placeholder="https://checkout.eduzz.com/..." value="' + escapeHtml(state.settings?.checkoutUrl || '') + '"></div>' +
+        '<div style="margin:8px 0 5px;padding:8px;background:#f8f9fa;border-radius:6px;"><strong>Checkout recuperação opcional</strong><div style="font-size:0.75rem;color:#666;">Use somente para lead parado ou objeção de preço.</div></div>' +
+        '<div style="margin-bottom:5px;"><label>Preço recuperação</label><input type="text" id="comRecoveryPrice" placeholder="R$ 17,00" value="' + escapeHtml(state.settings?.recoveryPrice || '') + '"></div>' +
+        '<div style="margin-bottom:5px;"><label>Link checkout recuperação</label><input type="text" id="comRecoveryCheckoutUrl" placeholder="https://pay.cakto.com.br/..." value="' + escapeHtml(state.settings?.recoveryCheckoutUrl || '') + '"></div>' +
         '<div style="margin-bottom:5px;"><label>Método de entrega</label><input type="text" id="comDeliveryMethod" placeholder="download" value="' + escapeHtml(state.settings?.deliveryMethod || '') + '"></div>' +
         '<div class="flex" style="margin-top:6px;">' +
           '<button class="btn btn-primary" onclick="handleSaveCommercial()">Salvar configurações</button>' +
@@ -1186,6 +1327,7 @@ function renderCommercial(state) {
     }
     var s = state.settings || {};
     var checkoutStatus = s.checkoutStatus || 'missing';
+    var recoveryStatus = s.recoveryCheckoutStatus || 'missing';
     var statusMap = {
       missing: { label: 'Não configurado', className: 'tag-pending' },
       pending_validation: { label: 'Pendente', className: 'tag-pending' },
@@ -1194,12 +1336,21 @@ function renderCommercial(state) {
       rejected: { label: 'Rejeitado', className: 'tag-sale-no' }
     };
     var statusInfo = statusMap[checkoutStatus] || statusMap.missing;
+    var recoveryStatusInfo = statusMap[recoveryStatus] || statusMap.missing;
     var validationHtml = s.validation ? (
       '<div style="margin-top:6px;padding:6px;background:#f8f9fa;border-radius:4px;">' +
         '<div><strong>Status HTTP:</strong> ' + escapeHtml(String(s.validation.statusCode || '-')) + '</div>' +
         '<div><strong>URL final:</strong> ' + escapeHtml(s.validation.finalUrl || '-') + '</div>' +
         '<div><strong>Domínio Cakto:</strong> ' + (s.validation.isCaktoDomain ? 'Sim' : 'Não') + '</div>' +
         (s.validation.error ? '<div><strong>Erro:</strong> ' + escapeHtml(s.validation.error) + '</div>' : '') +
+      '</div>'
+    ) : '';
+    var recoveryValidationHtml = s.recoveryValidation ? (
+      '<div style="margin-top:6px;padding:6px;background:#f8f9fa;border-radius:4px;">' +
+        '<div><strong>Status HTTP:</strong> ' + escapeHtml(String(s.recoveryValidation.statusCode || '-')) + '</div>' +
+        '<div><strong>URL final:</strong> ' + escapeHtml(s.recoveryValidation.finalUrl || '-') + '</div>' +
+        '<div><strong>Domínio Cakto:</strong> ' + (s.recoveryValidation.isCaktoDomain ? 'Sim' : 'Não') + '</div>' +
+        (s.recoveryValidation.error ? '<div><strong>Erro:</strong> ' + escapeHtml(s.recoveryValidation.error) + '</div>' : '') +
       '</div>'
     ) : '';
     container.innerHTML = '' +
@@ -1210,12 +1361,20 @@ function renderCommercial(state) {
         '<div><strong>Entrega:</strong> ' + escapeHtml(s.deliveryMethod || '-') + '</div>' +
         '<div style="margin-top:3px;"><strong>Status:</strong> <span class="tag ' + statusInfo.className + '">' + statusInfo.label + '</span></div>' +
         validationHtml +
+        '<div style="margin-top:10px;padding-top:8px;border-top:1px solid #eee;"><strong>Checkout recuperação</strong></div>' +
+        '<div><strong>Preço recuperação:</strong> ' + escapeHtml(s.recoveryPrice || '-') + '</div>' +
+        '<div><strong>Link recuperação:</strong> ' + escapeHtml(s.recoveryCheckoutUrl || '-') + '</div>' +
+        '<div style="margin-top:3px;"><strong>Status recuperação:</strong> <span class="tag ' + recoveryStatusInfo.className + '">' + recoveryStatusInfo.label + '</span></div>' +
+        recoveryValidationHtml +
       '</div>' +
       '<div class="flex" style="margin-top:6px;">' +
         '<button class="btn btn-warning" onclick="showCommercialFormFn()">Editar</button>' +
-        '<button class="btn btn-success" onclick="handleValidateCheckout()">Validar checkout</button>' +
+        '<button class="btn btn-success" onclick="handleValidateCheckout()">Validar normal</button>' +
         (checkoutStatus === 'validated' ? '<button class="btn btn-success" onclick="handleApproveCommercial()">Aprovar</button>' : '') +
         (checkoutStatus !== 'missing' && checkoutStatus !== 'approved' ? '<button class="btn btn-secondary" onclick="handleRejectCommercial()">Rejeitar</button>' : '') +
+        (s.recoveryCheckoutUrl ? '<button class="btn btn-success" onclick="handleValidateRecoveryCheckout()">Validar recuperação</button>' : '') +
+        (recoveryStatus === 'validated' ? '<button class="btn btn-success" onclick="handleApproveRecoveryCommercial()">Aprovar recuperação</button>' : '') +
+        (s.recoveryCheckoutUrl && recoveryStatus !== 'missing' && recoveryStatus !== 'approved' ? '<button class="btn btn-secondary" onclick="handleRejectRecoveryCommercial()">Rejeitar recuperação</button>' : '') +
         '<button class="btn btn-danger" onclick="handleResetCommercial()">Resetar</button>' +
       '</div><div id="comMsg" class="success-msg"></div>';
   } catch (e) {
@@ -1236,12 +1395,14 @@ async function handleSaveCommercial() {
   var productName = document.getElementById('comProductName').value.trim();
   var price = document.getElementById('comPrice').value.trim();
   var checkoutUrl = document.getElementById('comCheckoutUrl').value.trim();
+  var recoveryPrice = document.getElementById('comRecoveryPrice').value.trim();
+  var recoveryCheckoutUrl = document.getElementById('comRecoveryCheckoutUrl').value.trim();
   var deliveryMethod = document.getElementById('comDeliveryMethod').value.trim();
   var msgEl = document.getElementById('comMsg');
   msgEl.textContent = ''; msgEl.className = 'success-msg';
   if (!productName || !price) { msgEl.className = 'error-msg'; msgEl.textContent = 'Nome do produto e preço são obrigatórios.'; return; }
   try {
-    var result = await api('POST', '/api/commercial-settings/save', { productName: productName, price: price, checkoutUrl: checkoutUrl, deliveryMethod: deliveryMethod });
+    var result = await api('POST', '/api/commercial-settings/save', { productName: productName, price: price, checkoutUrl: checkoutUrl, deliveryMethod: deliveryMethod, recoveryPrice: recoveryPrice, recoveryCheckoutUrl: recoveryCheckoutUrl });
     commercialState = { hasSettings: true, settings: result.settings };
     showCommercialForm = false; renderCommercial(commercialState);
     msgEl.textContent = 'Configurações salvas!';
@@ -1259,14 +1420,36 @@ async function handleValidateCheckout() {
   } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
 }
 
+async function handleValidateRecoveryCheckout() {
+  var msgEl = document.getElementById('comMsg');
+  msgEl.textContent = ''; msgEl.className = 'success-msg';
+  try {
+    var result = await api('POST', '/api/commercial-settings/validate-checkout', { checkoutUrl: commercialState.settings.recoveryCheckoutUrl, target: 'recovery' });
+    commercialState = { hasSettings: true, settings: result.settings };
+    renderCommercial(commercialState);
+    msgEl.textContent = 'Checkout de recuperação validado!';
+  } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+}
+
 async function handleApproveCommercial() {
   var msgEl = document.getElementById('comMsg');
   msgEl.textContent = ''; msgEl.className = 'success-msg';
   try {
-    var result = await api('POST', '/api/commercial-settings/approve');
+    var result = await api('POST', '/api/commercial-settings/approve', { target: 'normal' });
     commercialState = { hasSettings: true, settings: result.settings };
     renderCommercial(commercialState);
     msgEl.textContent = 'Configurações aprovadas!';
+  } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+}
+
+async function handleApproveRecoveryCommercial() {
+  var msgEl = document.getElementById('comMsg');
+  msgEl.textContent = ''; msgEl.className = 'success-msg';
+  try {
+    var result = await api('POST', '/api/commercial-settings/approve', { target: 'recovery' });
+    commercialState = { hasSettings: true, settings: result.settings };
+    renderCommercial(commercialState);
+    msgEl.textContent = 'Checkout de recuperação aprovado!';
   } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
 }
 
@@ -1274,10 +1457,21 @@ async function handleRejectCommercial() {
   var msgEl = document.getElementById('comMsg');
   msgEl.textContent = ''; msgEl.className = 'success-msg';
   try {
-    var result = await api('POST', '/api/commercial-settings/reject');
+    var result = await api('POST', '/api/commercial-settings/reject', { target: 'normal' });
     commercialState = { hasSettings: true, settings: result.settings };
     renderCommercial(commercialState);
     msgEl.textContent = 'Configurações rejeitadas.';
+  } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+}
+
+async function handleRejectRecoveryCommercial() {
+  var msgEl = document.getElementById('comMsg');
+  msgEl.textContent = ''; msgEl.className = 'success-msg';
+  try {
+    var result = await api('POST', '/api/commercial-settings/reject', { target: 'recovery' });
+    commercialState = { hasSettings: true, settings: result.settings };
+    renderCommercial(commercialState);
+    msgEl.textContent = 'Checkout de recuperação rejeitado.';
   } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
 }
 
@@ -1316,6 +1510,18 @@ async function loadLeads() {
   } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro ao carregar: ' + e.message; }
 }
 
+async function clearLeads() {
+  var msgEl = document.getElementById('leadImportMsg');
+  msgEl.textContent = ''; msgEl.className = 'success-msg';
+  if (!confirm('Limpar todos os leads importados? Isso nao apaga atendimentos ja criados.')) return;
+  try {
+    var result = await api('POST', '/api/leads/clear');
+    leadsState = { total: result.total, leads: result.leads };
+    msgEl.textContent = 'Leads limpos.';
+    renderLeadsList(leadsState);
+  } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+}
+
 function renderLeadsList(state) {
   var container = document.getElementById('leadsContent');
   if (!state || !state.leads || state.leads.length === 0) {
@@ -1335,9 +1541,158 @@ function renderLeadsList(state) {
   container.innerHTML = html;
 }
 
+async function loadCampaign() {
+  try {
+    campaignState = await api('GET', '/api/campaign');
+    renderCampaign(campaignState);
+  } catch (e) {
+    var msgEl = document.getElementById('campaignMsg');
+    if (msgEl) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro ao carregar campanha: ' + e.message; }
+  }
+}
+
+function campaignStatusLabel(status) {
+  var map = {
+    idle: 'Sem campanha',
+    prepared: 'Preparada',
+    running: 'Enviando',
+    paused: 'Pausada',
+    completed: 'Finalizada',
+    cancelled: 'Cancelada'
+  };
+  return map[status] || status;
+}
+
+function renderCampaign(state) {
+  var container = document.getElementById('campaignContent');
+  if (!container) return;
+  if (!state || !state.items) {
+    container.innerHTML = '<div class="empty" style="margin-top:8px;">Nenhuma campanha preparada.</div>';
+    return;
+  }
+  var counts = state.counts || { queued: 0, sent: 0, skipped: 0 };
+  var total = state.items.length || 0;
+  var sent = counts.sent || 0;
+  var pct = total ? Math.round((sent / total) * 100) : 0;
+  var nextDue = state.nextDueAt ? new Date(state.nextDueAt).toLocaleTimeString() : '-';
+  var preview = state.items.slice(0, 8).map(function(item) {
+    return '<div>+' + escapeHtml(item.phone) + ' · ' + escapeHtml(item.status) + '</div>';
+  }).join('');
+  container.innerHTML = '' +
+    '<div class="lead-summary">' +
+      '<span class="lead-chip">Status: ' + escapeHtml(campaignStatusLabel(state.status)) + '</span>' +
+      '<span class="lead-chip">Enviados: ' + sent + '/' + total + '</span>' +
+      '<span class="lead-chip">Pendentes: ' + (counts.queued || 0) + '</span>' +
+      '<span class="lead-chip">Próximo: ' + escapeHtml(nextDue) + '</span>' +
+    '</div>' +
+    '<div class="campaign-progress"><div class="campaign-progress-bar" style="width:' + pct + '%;"></div></div>' +
+    '<div class="lead-list-preview">' + (preview || '<div>Nenhum item preparado.</div>') + '</div>';
+}
+
+async function prepareCampaign() {
+  var msgEl = document.getElementById('campaignMsg');
+  msgEl.textContent = ''; msgEl.className = 'success-msg';
+  var message = document.getElementById('campaignMessage').value.trim();
+  var limit = Number(document.getElementById('campaignLimit').value || 50);
+  var minDelaySeconds = Number(document.getElementById('campaignMinDelay').value || 45);
+  var maxDelaySeconds = Number(document.getElementById('campaignMaxDelay').value || 120);
+  if (!message) { msgEl.className = 'error-msg'; msgEl.textContent = 'Digite a mensagem inicial.'; return; }
+  try {
+    campaignState = await api('POST', '/api/campaign/prepare', { message, limit, minDelaySeconds, maxDelaySeconds });
+    msgEl.textContent = 'Campanha preparada. Revise e clique em Iniciar envio.';
+    renderCampaign(campaignState);
+  } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+}
+
+async function startCampaign() {
+  var msgEl = document.getElementById('campaignMsg');
+  msgEl.textContent = ''; msgEl.className = 'success-msg';
+  if (!confirm('Iniciar campanha inicial com delay controlado?')) return;
+  try {
+    campaignState = await api('POST', '/api/campaign/start');
+    msgEl.textContent = 'Campanha iniciada. A extensão vai enviar um por vez.';
+    renderCampaign(campaignState);
+  } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+}
+
+async function pauseCampaign() {
+  var msgEl = document.getElementById('campaignMsg');
+  msgEl.textContent = ''; msgEl.className = 'success-msg';
+  try {
+    campaignState = await api('POST', '/api/campaign/pause');
+    msgEl.textContent = 'Campanha pausada.';
+    renderCampaign(campaignState);
+  } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+}
+
+async function cancelCampaign() {
+  var msgEl = document.getElementById('campaignMsg');
+  msgEl.textContent = ''; msgEl.className = 'success-msg';
+  if (!confirm('Cancelar campanha atual?')) return;
+  try {
+    campaignState = await api('POST', '/api/campaign/cancel');
+    msgEl.textContent = 'Campanha cancelada.';
+    renderCampaign(campaignState);
+  } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+}
+
+async function clearCampaign() {
+  var msgEl = document.getElementById('campaignMsg');
+  msgEl.textContent = ''; msgEl.className = 'success-msg';
+  if (!confirm('Limpar a fila da campanha atual?')) return;
+  try {
+    campaignState = await api('POST', '/api/campaign/clear');
+    msgEl.textContent = 'Fila limpa.';
+    renderCampaign(campaignState);
+  } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+}
+
+async function loadInjectionQueue() {
+  try {
+    injectionQueueState = await api('GET', '/api/inject-whatsapp/queue');
+    renderInjectionQueue(injectionQueueState);
+  } catch (e) {
+    var msgEl = document.getElementById('injectionQueueMsg');
+    if (msgEl) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro ao carregar fila: ' + e.message; }
+  }
+}
+
+function renderInjectionQueue(state) {
+  var container = document.getElementById('injectionQueueContent');
+  if (!container) return;
+  if (!state || !state.counts) {
+    container.innerHTML = '<div class="empty" style="margin-top:8px;">Fila vazia.</div>';
+    return;
+  }
+  var c = state.counts;
+  var preview = (state.tasks || []).slice(0, 8).map(function(task) {
+    return '<div>+' + escapeHtml(task.phone || '-') + ' · ' + escapeHtml(task.status || '-') + ' · ' + escapeHtml(task.source || '-') + (task.error ? ' · ' + escapeHtml(task.error) : '') + '</div>';
+  }).join('');
+  container.innerHTML = '' +
+    '<div class="lead-summary">' +
+      '<span class="lead-chip">Fila: ' + (c.queued || 0) + '</span>' +
+      '<span class="lead-chip">Enviando: ' + ((c.claimed || 0) + (c.sending || 0)) + '</span>' +
+      '<span class="lead-chip">Enviados: ' + (c.sent || 0) + '</span>' +
+      '<span class="lead-chip">Falhas: ' + (c.failed || 0) + '</span>' +
+    '</div>' +
+    '<div class="lead-list-preview">' + (preview || '<div>Nenhuma tarefa recente.</div>') + '</div>';
+}
+
+async function clearFinishedInjectionQueue() {
+  var msgEl = document.getElementById('injectionQueueMsg');
+  msgEl.textContent = ''; msgEl.className = 'success-msg';
+  try {
+    injectionQueueState = await api('POST', '/api/inject-whatsapp/queue/clear-finished');
+    msgEl.textContent = 'Finalizados removidos da visualização.';
+    renderInjectionQueue(injectionQueueState);
+  } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+}
+
 setInterval(async function() {
   if (!isEditing) {
-    await Promise.all([ loadReviews(), loadStats(), loadRuntime() ]);
+    var jobs = [ loadReviews(), loadStats(), loadRuntime() ];
+    if (currentAdminPanel === 'leadsPanel') { jobs.push(loadCampaign()); jobs.push(loadInjectionQueue()); }
+    await Promise.all(jobs);
   }
 }, 5000);
 

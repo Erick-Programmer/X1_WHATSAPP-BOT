@@ -135,6 +135,10 @@ class LeadStore {
     save(leads);
     return { imported, updated, skipped, total: leads.length, leads };
   }
+
+  clear(): void {
+    save([]);
+  }
 }
 
 export const leadStore = new LeadStore();

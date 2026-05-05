@@ -718,6 +718,7 @@
   let importedCache = new Set();
 
   async function autoImportScan() {
+    if (window.__copilotoInjectingText) return;
     const rows = document.querySelectorAll('div[role="row"], div[role="listitem"]');
     for (const row of rows) {
       const spans = row.querySelectorAll("span");
@@ -783,7 +784,10 @@
 
   // ─── Injetar texto na conversa por telefone ────────────────
   async function openConversationAndInject(phone, text) {
+    if (window.__copilotoInjectingText) return { ok: false, error: "Injecao ja em andamento." };
+    window.__copilotoInjectingText = true;
     const digits = phone.replace(/\D/g, "");
+    try {
 
     // 1. Pega o input de busca
     const input = document.querySelector('input[type="text"][aria-label]');
@@ -833,8 +837,10 @@
       document.execCommand("delete", false, null);
       inputSearch.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     }
-
     return { ok: true };
+    } finally {
+      setTimeout(() => { window.__copilotoInjectingText = false; }, 1000);
+    }
   }
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {

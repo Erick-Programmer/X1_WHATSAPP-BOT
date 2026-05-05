@@ -1,7 +1,37 @@
-# ESTADO DA SESSÃO — X1_WHATSAPP BOT
+﻿# ESTADO DA SESSÃO — X1_WHATSAPP BOT
 
 ## Status atual
 Sistema funcional em produção local. Servidor: `node dist/dev/copilotPanel/server.js`. Dashboard: `http://127.0.0.1:8787`. Extensão Edge carregada em `browser-extension/`.
+
+## Atualização desta rodada — 2026-05-05
+
+### Avanços principais concluídos
+- Mídias do produto atualizadas: `assets/produto-completo-preview.gif` registrado como mídia opcional em `src/templates/media.json`.
+- Lembretes do painel ajustados para orientar uso de `assets/produto-planners.png` ou `assets/produto-completo-preview.gif` quando fizer sentido.
+- Configuração de ambiente melhorada com `src/config/env.ts`, carregando `.env` local sem depender de `dotenv`.
+- `.env.example` atualizado com variáveis úteis: `COPILOT_PANEL_PORT`, `SIMULATION_FAST` e `DEEPSEEK_API_KEY`.
+- Checkout normal e checkout de recuperação separados no `commercialSettings`.
+- Painel Comercial passou a aceitar link normal e link de recuperação, com validação e aprovação separadas.
+- Sugestões de recuperação adicionadas: botão para gerar mensagens com oferta de recuperação, usando preço/link aprovado.
+- Score de sugestões implementado com `suggestionScorer`: o painel destaca a sugestão mais promissora com base em histórico e respostas aprovadas.
+- Campanha inicial criada no painel: importa lista de leads, prepara fila, envia mensagem inicial com delay controlado e mostra progresso.
+- Botões para limpar leads e limpar fila de campanha adicionados no painel.
+- Controle de pendências por cliente evoluído: responder/focar pendência específica, resolver sem responder e manter contexto de múltiplas mensagens.
+- Fluxo manual adicionado: quando não há pendência, o painel pode gerar follow-up por etapa comercial.
+- DeepSeek integrado ao fluxo manual com histórico da conversa + etapa escolhida, gerando 3 respostas contextuais.
+- Fila real de injeção criada com status `queued`, `claimed`, `sending`, `sent`, `failed`.
+- Extensão ganhou trava/lock de envio: só pega uma tarefa por vez e confirma status para o backend.
+- Auto-import da extensão pausa durante injeção para evitar capturar mensagem enviada como se fosse resposta do cliente.
+- Painel agora mostra a fila real de envio e permite limpar tarefas finalizadas.
+- Banner de checkout criado e refinado em `assets/checkout-banner-planner-estudante-pro-v4.png`.
+- Mensagem inicial de abordagem definida para testes manuais/campanha, sem emoji e sem apresentar o produto antes da permissão.
+
+### Estado operacional atual
+- Dashboard local continua em `http://127.0.0.1:8787`.
+- Servidor recomendado: `npm run build` e depois `node dist/dev/copilotPanel/server.js`.
+- Extensão precisa ser recarregada no Chrome/Edge quando `browser-extension/background.js` ou `browser-extension/content.js` forem alterados.
+- Fluxo recomendado para campanha: preparar lote, iniciar envio com delay, aguardar fila terminar, depois trabalhar respostas pelo painel.
+- Para WhatsApp real via API oficial, ainda fica como etapa futura; hoje o fluxo prático é WhatsApp Web + extensão + painel.
 
 ## O que está funcionando
 - Auto-import: extensão varre lista lateral do WhatsApp Web a cada 5s e importa conversas automaticamente
@@ -59,11 +89,13 @@ const hasRecentSent = (existingItems as any[]).some(
 **Fix:** `max-height: 45vh` → `65vh`. `force-scroll` de `height: 120px` → `min-height: 120px`.
 
 ## Próximo foco
-1. **[CUPOM]** Botão "Enviar cupom de recuperação" no painel — chama DeepSeek com contexto da conversa + código do cupom, gera mensagem editável antes de injetar. Aguarda: código do cupom, % desconto e link checkout da Cakto.
-2. **[TESTE]** Continuar simulação para acumular dados reais em `approved-responses.json`
-3. **[GO LIVE]** Integração WhatsApp Business API real
-4. **[ESTILO]** Analisar `approved-responses.json` — extrair palavras e frases mais frequentes por intenção e adicionar como reforço de estilo no prompt do DeepSeek.
-5. **[SCORE]** Calcular score de similaridade entre cada sugestão gerada e as respostas aprovadas em `approved-responses.json` — destacar o card com maior score como "recomendado" no painel.
+1. **[EXTENSÃO / ROBUSTEZ]** Testar fila real com lote maior e confirmar que nenhum envio fica preso em `queued`, `claimed` ou `sending`.
+2. **[CAMPANHA]** Rodar lote diário pequeno primeiro, validar taxa de resposta e ajustar mensagem inicial antes de escalar para 50 números/dia.
+3. **[APRENDIZADO]** Continuar aprovando/editando respostas para alimentar `approved-responses.json` e melhorar o estilo do DeepSeek.
+4. **[RECUPERAÇÃO]** Testar recuperação de R$ 17 em conversas reais quando houver objeção de preço.
+5. **[CHECKOUT]** Usar o banner final `assets/checkout-banner-planner-estudante-pro-v4.png` nos checkouts normal e recuperação.
+6. **[QUALIDADE]** Revisar métricas e conversões após os primeiros testes reais.
+7. **[FUTURO]** WhatsApp Business API oficial fica para etapa futura; manter fluxo prático atual (WhatsApp Web + extensão + painel local).
 
 ## ESTADO DOS ARQUIVOS CRÍTICOS
 
@@ -75,6 +107,10 @@ const hasRecentSent = (existingItems as any[]).some(
 | `src/dev/copilotPanel/server.ts` | ✅ Atualizado |
 | `assets/produto-planners.png` | ❓ A verificar |
 | `assets/ebooks-bonus.png` | ❓ A verificar |
+| `assets/produto-completo-preview.gif` | ✅ Criado/registrado |
+| `assets/checkout-banner-planner-estudante-pro-v4.png` | ✅ Criado |
+| `src/config/env.ts` | ✅ Criado |
+| `.env.example` | ✅ Atualizado |
 | `.env` (credenciais reais) | ❌ Não configurado (aguarda aprovação) |
 | `src/config/product.ts`          | ✅ Atualizado com produto real |
 | `src/services/replySuggestions.ts` | ✅ Revisado e humanizado       |
@@ -148,6 +184,24 @@ Produto sendo vendido: **Planner Estudante Pro** — 10 planners + 3 ebooks bôn
 - [x] `index.html` — `injectWhatsAppEdited` usa texto editado + grava no few-shot
 - [x] `index.html` — polling pausado com `isEditing` enquanto usuário edita textarea
 - [x] `index.html` — sugestões lado a lado (grid 3 colunas)
+- [x] `assets/produto-completo-preview.gif` — GIF registrado como mídia opcional
+- [x] Lembretes do painel para uso de PNG/GIF do produto
+- [x] `src/config/env.ts` — carregamento de `.env` local sem dotenv
+- [x] `.env.example` — variáveis `COPILOT_PANEL_PORT`, `SIMULATION_FAST`, `DEEPSEEK_API_KEY`
+- [x] `commercialSettings` — checkout normal e recuperação separados
+- [x] Painel Comercial — validação/aprovação de checkout normal e recuperação
+- [x] Sugestões de recuperação para oferta de R$ 17
+- [x] Sistema de score das sugestões com destaque da mais recomendada
+- [x] Campanha inicial com fila controlada, delay e progresso no painel
+- [x] Controles para limpar leads e limpar fila
+- [x] Pendências por cliente: responder/focar pendência específica, resolver sem responder, manter contexto
+- [x] Fluxo manual de continuação quando cliente não responde
+- [x] DeepSeek com histórico da conversa + etapa escolhida para gerar 3 follow-ups
+- [x] Fila real de injeção com status `queued`, `claimed`, `sending`, `sent`, `failed`
+- [x] Extensão com lock para não misturar envios
+- [x] Auto-import pausa durante injeção para evitar reimportar mensagem enviada
+- [x] Painel mostra fila real de envio e permite limpar tarefas finalizadas
+- [x] Banner final de checkout: `assets/checkout-banner-planner-estudante-pro-v4.png`
 
 ---
 

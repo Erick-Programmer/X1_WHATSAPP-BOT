@@ -3,13 +3,23 @@ import * as http from "http";
 import * as fs from "fs";
 import * as path from "path";
 import { classifyIntent } from "../../services/intentClassifier";
-import { generateSuggestions } from "../../services/replySuggestions";
+import {
+  generateFlowContinuationSuggestionsSmart,
+  generateFlowContinuationSuggestions,
+  generateRecoverySuggestions,
+  generateSuggestions,
+} from "../../services/replySuggestions";
 import { reviewQueue } from "../../services/reviewQueue";
 import { botRuntime } from "../../services/botRuntimeState";
 import { whatsappCredentials } from "../../services/whatsappCredentials";
 import { commercialSettings } from "../../services/commercialSettings";
 import { commercialConfig } from "../../config/commercial";
 import { leadStore, normalizePhone, looksLikePhone } from "../../services/leadStore";
+import { scoreReviews } from "../../services/suggestionScorer";
+import { ReviewItem } from "../../types/copilot";
+import { campaignStore } from "../../services/campaignStore";
+import { Intent } from "../../types/intent";
+import { injectionQueue } from "../../services/injectionQueue";
 // ─── Approved Responses (few-shot) ──────────────────────────
 const APPROVED_FILE = path.resolve(process.cwd(), "data", "approved-responses.json");
 
@@ -21,9 +31,6 @@ function saveApprovedResponse(intent: string, text: string): void {
   list.push({ intent, text, injectedAt: new Date().toISOString() });
   fs.writeFileSync(APPROVED_FILE, JSON.stringify(list, null, 2), "utf-8");
 }
-
-// No topo do server.ts, após os imports:
-let pendingInject: { phone: string; text: string } | null = null;
 
 const PORT = parseInt(process.env.COPILOT_PANEL_PORT || "8787", 10);
 const HOST = "127.0.0.1";
@@ -103,7 +110,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const items = Array.from(
         (reviewQueue as unknown as { items: Map<string, unknown> }).items.values()
       );
-      jsonResponse(res, 200, items);
+      jsonResponse(res, 200, scoreReviews(items as ReviewItem[]));
       return;
     }
 
@@ -130,6 +137,75 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       }
 
       jsonResponse(res, 200, leadStore.importFromText(rawText));
+      return;
+    }
+
+    // POST /api/leads/clear
+    if (method === "POST" && url === "/api/leads/clear") {
+      leadStore.clear();
+      jsonResponse(res, 200, { total: 0, leads: [] });
+      return;
+    }
+
+    // GET /api/campaign
+    if (method === "GET" && url === "/api/campaign") {
+      jsonResponse(res, 200, campaignStore.getStatus());
+      return;
+    }
+
+    // POST /api/campaign/prepare
+    if (method === "POST" && url === "/api/campaign/prepare") {
+      try {
+        const body = await parseBody(req);
+        const state = campaignStore.prepare({
+          message: (body.message as string) || "",
+          limit: body.limit as number | undefined,
+          minDelaySeconds: body.minDelaySeconds as number | undefined,
+          maxDelaySeconds: body.maxDelaySeconds as number | undefined,
+        });
+        jsonResponse(res, 200, campaignStore.getStatus());
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Erro desconhecido";
+        jsonResponse(res, 400, { error: msg });
+      }
+      return;
+    }
+
+    // POST /api/campaign/start
+    if (method === "POST" && url === "/api/campaign/start") {
+      try {
+        campaignStore.start();
+        jsonResponse(res, 200, campaignStore.getStatus());
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Erro desconhecido";
+        jsonResponse(res, 400, { error: msg });
+      }
+      return;
+    }
+
+    // POST /api/campaign/pause
+    if (method === "POST" && url === "/api/campaign/pause") {
+      try {
+        campaignStore.pause();
+        jsonResponse(res, 200, campaignStore.getStatus());
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Erro desconhecido";
+        jsonResponse(res, 400, { error: msg });
+      }
+      return;
+    }
+
+    // POST /api/campaign/cancel
+    if (method === "POST" && url === "/api/campaign/cancel") {
+      campaignStore.cancel();
+      jsonResponse(res, 200, campaignStore.getStatus());
+      return;
+    }
+
+    // POST /api/campaign/clear
+    if (method === "POST" && url === "/api/campaign/clear") {
+      campaignStore.clear();
+      jsonResponse(res, 200, campaignStore.getStatus());
       return;
     }
 
@@ -318,6 +394,122 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           validated: s.validated,
         })),
       });
+      return;
+    }
+
+    // POST /api/reviews/:id/recovery-suggestions
+    const recoveryMatch = url.match(/^\/api\/reviews\/([^/]+)\/recovery-suggestions$/);
+    if (method === "POST" && recoveryMatch) {
+      try {
+        const reviewId = recoveryMatch[1];
+        const item = reviewQueue.getReviewItem(reviewId);
+        if (!item) {
+          jsonResponse(res, 404, { error: "Review not found" });
+          return;
+        }
+
+        const nextRound = (item.suggestionRound ?? 1) + 1;
+        const newSuggestions = generateRecoverySuggestions(nextRound);
+        reviewQueue.regenerateSuggestions(reviewId, newSuggestions, nextRound);
+
+        const updated = reviewQueue.getReviewItem(reviewId);
+        jsonResponse(res, 200, {
+          reviewId: updated!.id,
+          status: updated!.status,
+          suggestionRound: updated!.suggestionRound,
+          suggestions: updated!.suggestions.map((s) => ({
+            id: s.id,
+            type: s.type,
+            text: s.text,
+            validated: s.validated,
+          })),
+        });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Erro desconhecido";
+        jsonResponse(res, 400, { error: msg });
+      }
+      return;
+    }
+
+    // POST /api/reviews/:id/focus
+    const focusMatch = url.match(/^\/api\/reviews\/([^/]+)\/focus$/);
+    if (method === "POST" && focusMatch) {
+      try {
+        const reviewId = focusMatch[1];
+        const item = reviewQueue.getReviewItem(reviewId);
+        if (!item) {
+          jsonResponse(res, 404, { error: "Review not found" });
+          return;
+        }
+
+        const nextRound = (item.suggestionRound ?? 1) + 1;
+        const focusHistory = (Array.from(
+          (reviewQueue as unknown as { items: Map<string, unknown> }).items.values()
+        ) as Array<{ contactId: string; customerMessage: string; createdAt: Date }>)
+          .filter(i => i.contactId === item.contactId)
+          .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+          .slice(-4)
+          .map(i => i.customerMessage);
+
+        const newSuggestions = await generateSuggestions(item.intent, nextRound, [
+          ...focusHistory,
+          `Responder especificamente esta mensagem: ${item.customerMessage}`,
+        ]);
+        reviewQueue.regenerateSuggestions(reviewId, newSuggestions, nextRound);
+        jsonResponse(res, 200, { ok: true, reviewId });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Erro desconhecido";
+        jsonResponse(res, 400, { error: msg });
+      }
+      return;
+    }
+
+    // POST /api/contacts/:contactId/continue-flow
+    const continueMatch = url.match(/^\/api\/contacts\/([^/]+)\/continue-flow$/);
+    if (method === "POST" && continueMatch) {
+      try {
+        const contactId = decodeURIComponent(continueMatch[1]);
+        const body = await parseBody(req);
+        const stage = (body.stage as string) || "followup";
+        const contactItems = (Array.from(
+          (reviewQueue as unknown as { items: Map<string, unknown> }).items.values()
+        ) as ReviewItem[])
+          .filter((item) => item.contactId === contactId)
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+        const latest = contactItems[0];
+        const history = contactItems
+          .slice()
+          .reverse()
+          .flatMap((review) => {
+            const sent = review.chosenSuggestionId
+              ? review.suggestions.find((suggestion) => suggestion.id === review.chosenSuggestionId)?.text
+              : null;
+            return sent
+              ? [`Cliente: ${review.customerMessage}`, `Voce: ${sent}`]
+              : [`Cliente: ${review.customerMessage}`];
+          })
+          .slice(-8);
+        const suggestions = await generateFlowContinuationSuggestionsSmart(stage, history, 1);
+        const item = reviewQueue.createReviewItem(
+          contactId,
+          `msg_flow_${Date.now()}`,
+          `Continuar fluxo manual: ${stage}`,
+          Intent.Unknown,
+          suggestions
+        );
+        reviewQueue.updateReviewMetadata(item.id, {
+          contactName: latest?.contactName,
+          contactPhone: latest?.contactPhone || latest?.contactId,
+          source: "manual",
+          receivedAt: new Date().toISOString(),
+        });
+
+        jsonResponse(res, 201, reviewQueue.getReviewItem(item.id));
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Erro desconhecido";
+        jsonResponse(res, 400, { error: msg });
+      }
       return;
     }
 
@@ -601,8 +793,17 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         const price = (body.price as string) || "";
         const checkoutUrl = (body.checkoutUrl as string) || "";
         const deliveryMethod = (body.deliveryMethod as string) || "";
+        const recoveryPrice = (body.recoveryPrice as string) || "";
+        const recoveryCheckoutUrl = (body.recoveryCheckoutUrl as string) || "";
 
-        const saved = commercialSettings.save({ productName, price, checkoutUrl, deliveryMethod });
+        const saved = commercialSettings.save({
+          productName,
+          price,
+          checkoutUrl,
+          deliveryMethod,
+          recoveryPrice,
+          recoveryCheckoutUrl,
+        });
         jsonResponse(res, 200, { hasSettings: true, settings: saved });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Erro desconhecido";
@@ -616,11 +817,12 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       try {
         const body = await parseBody(req);
         const checkoutUrl = (body.checkoutUrl as string) || "";
+        const target = body.target === "recovery" ? "recovery" : "normal";
         if (!checkoutUrl) {
           jsonResponse(res, 400, { error: "checkoutUrl é obrigatório" });
           return;
         }
-        const result = await commercialSettings.validateCheckout(checkoutUrl);
+        const result = await commercialSettings.validateCheckout(checkoutUrl, target);
         jsonResponse(res, 200, { hasSettings: true, settings: result });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Erro desconhecido";
@@ -632,7 +834,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     // POST /api/commercial-settings/approve
     if (method === "POST" && url === "/api/commercial-settings/approve") {
       try {
-        const result = commercialSettings.approve();
+        const body = await parseBody(req);
+        const target = body.target === "recovery" ? "recovery" : "normal";
+        const result = commercialSettings.approve(target);
         jsonResponse(res, 200, { hasSettings: true, settings: result });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Erro desconhecido";
@@ -644,7 +848,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     // POST /api/commercial-settings/reject
     if (method === "POST" && url === "/api/commercial-settings/reject") {
       try {
-        const result = commercialSettings.reject();
+        const body = await parseBody(req);
+        const target = body.target === "recovery" ? "recovery" : "normal";
+        const result = commercialSettings.reject(target);
         jsonResponse(res, 200, { hasSettings: true, settings: result });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Erro desconhecido";
@@ -663,25 +869,81 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     // POST /api/inject-whatsapp
     if (method === "POST" && url === "/api/inject-whatsapp") {
       const body = await parseBody(req);
-      pendingInject = { phone: body.phone as string, text: body.text as string };
+      const task = injectionQueue.enqueue({
+        phone: body.phone as string,
+        text: body.text as string,
+        intent: body.intent as string | undefined,
+        source: "manual_reply",
+      });
 
       // Salva resposta aprovada para few-shot
       if (body.intent && body.text) {
         saveApprovedResponse(body.intent as string, body.text as string);
       }
 
-      jsonResponse(res, 200, { ok: true });
+      jsonResponse(res, 200, { ok: true, taskId: task.id, status: task.status });
       return;
     }
 
     if (method === "GET" && url === "/api/inject-whatsapp/pending") {
-      if (pendingInject) {
-        const payload = pendingInject;
-        pendingInject = null; // consome e limpa
-        jsonResponse(res, 200, { ok: true, ...payload });
-      } else {
-        jsonResponse(res, 200, { ok: false });
+      let task = injectionQueue.claimNext();
+      if (!task) {
+        const campaignPayload = campaignStore.claimNextForSend();
+        if (campaignPayload) {
+          injectionQueue.enqueue({
+            phone: campaignPayload.phone,
+            text: campaignPayload.text,
+            source: "initial_campaign",
+            campaignItemId: campaignPayload.campaignItemId,
+          });
+          task = injectionQueue.claimNext();
+        }
       }
+
+      if (task) {
+        jsonResponse(res, 200, {
+          ok: true,
+          taskId: task.id,
+          phone: task.phone,
+          text: task.text,
+          source: task.source,
+        });
+        return;
+      }
+      jsonResponse(res, 200, { ok: false });
+      return;
+    }
+
+    // POST /api/inject-whatsapp/:id/status
+    const injectStatusMatch = url.match(/^\/api\/inject-whatsapp\/([^/]+)\/status$/);
+    if (method === "POST" && injectStatusMatch) {
+      const taskId = injectStatusMatch[1];
+      const body = await parseBody(req);
+      const status = body.status as string;
+      if (status === "sending") {
+        injectionQueue.markSending(taskId);
+      } else if (status === "sent") {
+        injectionQueue.markSent(taskId);
+      } else if (status === "failed") {
+        injectionQueue.markFailed(taskId, (body.error as string) || "Erro desconhecido");
+      } else {
+        jsonResponse(res, 400, { error: "status invalido" });
+        return;
+      }
+      jsonResponse(res, 200, { ok: true });
+      return;
+    }
+
+    // GET /api/inject-whatsapp/queue
+    if (method === "GET" && url === "/api/inject-whatsapp/queue") {
+      jsonResponse(res, 200, injectionQueue.status());
+      return;
+    }
+
+    // POST /api/inject-whatsapp/queue/clear-finished
+    if (method === "POST" && url === "/api/inject-whatsapp/queue/clear-finished") {
+      injectionQueue.clearFinished();
+      jsonResponse(res, 200, injectionQueue.status());
       return;
     }
     
