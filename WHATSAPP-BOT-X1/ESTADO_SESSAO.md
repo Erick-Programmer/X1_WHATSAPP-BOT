@@ -59,9 +59,10 @@ const hasRecentSent = (existingItems as any[]).some(
 **Fix:** `max-height: 45vh` → `65vh`. `force-scroll` de `height: 120px` → `min-height: 120px`.
 
 ## Próximo foco
-1. **[TESTE]** Validar todos os fixes acima em conversa real com cliente
+1. **[TESTE]** npm run build + testar simulação como cliente no painel
 2. **[CONFIG]** Preencher `.env` com preço + link Cakto
-3. **[GO LIVE]** Integração WhatsApp Business API real
+3. **[ETAPA 2]** Integrar DeepSeek: passar `productKnowledge` + últimas 3 mensagens do cliente para gerar sugestões dinâmicas
+2. **[GO LIVE]** Integração WhatsApp Business API real
 
 ## ESTADO DOS ARQUIVOS CRÍTICOS
 
@@ -74,6 +75,10 @@ const hasRecentSent = (existingItems as any[]).some(
 | `assets/produto-planners.png` | ❓ A verificar |
 | `assets/ebooks-bonus.png` | ❓ A verificar |
 | `.env` (credenciais reais) | ❌ Não configurado (aguarda aprovação) |
+| `src/config/product.ts`          | ✅ Atualizado com produto real |
+| `src/services/replySuggestions.ts` | ✅ Revisado e humanizado       |
+| `src/services/deepseekSuggestions.ts` | ✅ Criado — integração DeepSeek |
+| `.env`                                | ✅ Criado com DEEPSEEK_API_KEY  |
 
 ## COMO RODAR AGORA
 
@@ -125,6 +130,12 @@ Produto sendo vendido: **Planner Estudante Pro** — 10 planners + 3 ebooks bôn
 - [x] Fix: reviews antigos cancelados ao enviar
 - [x] Fix: scroll sempre vai para o final do chat
 - [x] Fix: delay de 4s após injetar antes de recarregar reviews
+- [x] `product.ts` atualizado com nomes reais dos 10 planners, ebooks e frases humanas
+- [x] `replySuggestions.ts` revisado e humanizado (sem travessão, sem "super entendo", sem autoelogio)
+- [x] Etapa 2: `deepseekSuggestions.ts` criado — integração DeepSeek com histórico das últimas 3 mensagens
+- [x] `replySuggestions.ts` convertido para async com fallback estático
+- [x] `server.ts` atualizado nos 3 pontos de chamada (inbox/import, mock-message, regenerate)
+- [x] `.env` criado com `DEEPSEEK_API_KEY`
 
 ---
 

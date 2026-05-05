@@ -9,6 +9,8 @@ import { whatsappCredentials } from "../../services/whatsappCredentials";
 import { commercialSettings } from "../../services/commercialSettings";
 import { commercialConfig } from "../../config/commercial";
 import { leadStore, normalizePhone, looksLikePhone } from "../../services/leadStore";
+import * as dotenv from "dotenv";
+dotenv.config();
 
 // No topo do server.ts, após os imports:
 let pendingInject: { phone: string; text: string } | null = null;
@@ -182,11 +184,21 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         jsonResponse(res, 200, { skipped: true, reason: "recent_sent" });
         return;
       }
-      
+
       const messageId = `msg_import_${Date.now()}`;
 
       const intentResult = classifyIntent(lastMessage);
-      const suggestions = generateSuggestions(intentResult.intent);
+
+      // Monta histórico das últimas 3 mensagens deste contato
+      const contactHistory = (Array.from(
+        (reviewQueue as unknown as { items: Map<string, unknown> }).items.values()
+      ) as Array<{ contactId: string; customerMessage: string; createdAt: Date }>)
+        .filter(i => i.contactId === contactId)
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+        .slice(-3)
+        .map(i => i.customerMessage);
+
+      const suggestions = await generateSuggestions(intentResult.intent, 1, contactHistory);
 
       const item = reviewQueue.createReviewItem(
         contactId,
@@ -233,7 +245,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const messageId = (body.messageId as string) || `msg_${Date.now()}`;
 
       const intentResult = classifyIntent(customerMessage);
-      const suggestions = generateSuggestions(intentResult.intent);
+      const suggestions = await generateSuggestions(intentResult.intent, 1, [customerMessage]);
 
       const item = reviewQueue.createReviewItem(
         contactId,
@@ -272,7 +284,16 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       }
 
       const nextRound = (item.suggestionRound ?? 1) + 1;
-      const newSuggestions = generateSuggestions(item.intent, nextRound);
+
+      const regenHistory = (Array.from(
+        (reviewQueue as unknown as { items: Map<string, unknown> }).items.values()
+      ) as Array<{ contactId: string; customerMessage: string; createdAt: Date }>)
+        .filter(i => i.contactId === item.contactId)
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+        .slice(-3)
+        .map(i => i.customerMessage);
+
+      const newSuggestions = await generateSuggestions(item.intent, nextRound, regenHistory);
       reviewQueue.regenerateSuggestions(reviewId, newSuggestions, nextRound);
 
       const updated = reviewQueue.getReviewItem(reviewId);
