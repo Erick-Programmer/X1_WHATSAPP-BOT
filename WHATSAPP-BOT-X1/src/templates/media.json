@@ -4,6 +4,12 @@
     "file": "assets/produto-planners.png",
     "caption": "Aqui está uma visão geral do Planner Estudante Pro: 10 planners digitais em PDF + 3 ebooks bônus."
   },
+  "product_complete_preview": {
+    "type": "gif",
+    "file": "assets/produto-completo-preview.gif",
+    "caption": "Preview do pacote completo: 10 planners digitais em PDF + 3 ebooks bônus.",
+    "status": "optional_follow_up"
+  },
   "bonus_ebooks": {
     "type": "image",
     "file": "assets/ebooks-bonus.png",

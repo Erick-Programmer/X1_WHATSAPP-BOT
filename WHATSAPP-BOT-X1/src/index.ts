@@ -6,6 +6,7 @@
  * A integração real com WhatsApp Cloud API será feita em etapa futura.
  */
 
+import "./config/env";
 import { Conversation, Contact, Message } from "./types/conversation";
 import { Intent } from "./types/intent";
 import { classifyIntent } from "./services/intentClassifier";

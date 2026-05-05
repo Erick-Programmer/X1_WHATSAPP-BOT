@@ -311,6 +311,10 @@ let isEditing = false;
 function toggleAdminPanel(panelId) {
   const panel = document.getElementById(panelId);
   const btn = document.querySelector('.ab-btn[data-panel="' + panelId + '"]');
+  if (!panel) {
+    console.error('[admin] painel nao encontrado:', panelId);
+    return;
+  }
   if (currentAdminPanel === panelId) {
     panel.classList.remove('open');
     if (btn) btn.classList.remove('active');
@@ -326,6 +330,9 @@ function toggleAdminPanel(panelId) {
   panel.classList.add('open');
   if (btn) btn.classList.add('active');
   currentAdminPanel = panelId;
+  if (panelId === 'credsPanel') loadCredentials();
+  if (panelId === 'commercialPanel') loadCommercial();
+  if (panelId === 'leadsPanel') loadLeads();
 }
 
 function setFilter(mode) {
@@ -372,7 +379,8 @@ function escapeHtml(str) {
 
 function getSuggestionReminder(intent) {
   var map = {
-    positive_confirmation: 'Depois de enviar o texto, anexe assets/produto-planners.png',
+    positive_confirmation: 'Depois de enviar o texto, anexe assets/produto-planners.png ou assets/produto-completo-preview.gif se quiser mostrar o pacote em movimento.',
+    ask_content: 'Se a pessoa pedir para ver melhor o produto, envie assets/produto-completo-preview.gif.',
     ask_price: 'Esta resposta pode incluir o link de checkout aprovado, se configurado.',
     buy_intent: 'Esta resposta pode incluir o link de checkout aprovado, se configurado.',
     objection_expensive: 'Mensagem apenas em texto.',
@@ -1039,41 +1047,64 @@ async function loadCredentials() {
   try {
     credentialsState = await api('GET', '/api/credentials/status');
     renderCredentials(credentialsState);
-  } catch (e) {}
+  } catch (e) {
+    console.error('[credentials] load error:', e);
+    var container = document.getElementById('credentialsContent');
+    if (container) {
+      container.innerHTML = '' +
+        '<div class="error-msg">Erro ao carregar credenciais: ' + escapeHtml(e.message || String(e)) + '</div>' +
+        '<div class="flex" style="margin-top:6px;">' +
+          '<button class="btn btn-secondary" onclick="loadCredentials()">Tentar novamente</button>' +
+          '<button class="btn btn-warning" onclick="showCredentialsFormFn()">Editar credenciais</button>' +
+        '</div><div id="credMsg" class="success-msg"></div>';
+    }
+  }
 }
 
 function renderCredentials(state) {
   var container = document.getElementById('credentialsContent');
-  if (!state.hasCredentials || showCredentialsForm) {
+  console.log('[credentials] state:', state);
+  try {
+    state = state || { hasCredentials: false };
+    if (!state.hasCredentials || showCredentialsForm) {
+      container.innerHTML = '' +
+        '<div style="margin-bottom:6px;font-size:0.82rem;color:#666;">Preencha as credenciais do WhatsApp Cloud API.</div>' +
+        '<div style="margin-bottom:5px;"><label>WA_API_TOKEN</label><input type="password" id="credApiToken" placeholder="Token da API"></div>' +
+        '<div style="margin-bottom:5px;"><label>WA_PHONE_NUMBER_ID</label><input type="text" id="credPhoneNumberId" placeholder="ID do número de telefone"></div>' +
+        '<div style="margin-bottom:5px;"><label>WA_BUSINESS_ACCOUNT_ID</label><input type="text" id="credBusinessAccountId" placeholder="ID da conta de negócios"></div>' +
+        '<div style="margin-bottom:5px;"><label>WA_VERIFY_TOKEN</label><input type="password" id="credVerifyToken" placeholder="Verify token"></div>' +
+        '<div class="flex" style="margin-top:6px;">' +
+          '<button class="btn btn-primary" onclick="handleSaveCredentials()">Salvar credenciais</button>' +
+          (state.hasCredentials ? '<button class="btn btn-secondary" onclick="cancelCredentialsForm()">Cancelar</button>' : '') +
+        '</div><div id="credMsg" class="success-msg"></div>';
+      return;
+    }
+    var m = state.maskedCredentials || {};
+    var savedAt = state.savedAt ? new Date(state.savedAt).toLocaleString('pt-BR') : '-';
+    var lastUsedAt = state.lastUsedAt ? new Date(state.lastUsedAt).toLocaleString('pt-BR') : 'Nunca usada';
     container.innerHTML = '' +
-      '<div style="margin-bottom:6px;font-size:0.82rem;color:#666;">Preencha as credenciais do WhatsApp Cloud API.</div>' +
-      '<div style="margin-bottom:5px;"><label>WA_API_TOKEN</label><input type="password" id="credApiToken" placeholder="Token da API"></div>' +
-      '<div style="margin-bottom:5px;"><label>WA_PHONE_NUMBER_ID</label><input type="text" id="credPhoneNumberId" placeholder="ID do número de telefone"></div>' +
-      '<div style="margin-bottom:5px;"><label>WA_BUSINESS_ACCOUNT_ID</label><input type="text" id="credBusinessAccountId" placeholder="ID da conta de negócios"></div>' +
-      '<div style="margin-bottom:5px;"><label>WA_VERIFY_TOKEN</label><input type="password" id="credVerifyToken" placeholder="Verify token"></div>' +
+      '<div style="font-size:0.82rem;margin-bottom:6px;">' +
+        '<div><strong>Token:</strong> ' + escapeHtml(m.apiToken || '-') + '</div>' +
+        '<div><strong>Phone ID:</strong> ' + escapeHtml(m.phoneNumberId || '-') + '</div>' +
+        '<div><strong>Business ID:</strong> ' + escapeHtml(m.businessAccountId || '-') + '</div>' +
+        '<div><strong>Verify:</strong> ' + escapeHtml(m.verifyToken || '-') + '</div>' +
+        '<div style="margin-top:3px;"><strong>Salvo em:</strong> ' + savedAt + '</div>' +
+        '<div><strong>Último uso:</strong> ' + lastUsedAt + '</div>' +
+      '</div>' +
       '<div class="flex" style="margin-top:6px;">' +
-        '<button class="btn btn-primary" onclick="handleSaveCredentials()">Salvar credenciais</button>' +
-        (state.hasCredentials ? '<button class="btn btn-secondary" onclick="cancelCredentialsForm()">Cancelar</button>' : '') +
+        '<button class="btn btn-warning" onclick="showCredentialsFormFn()">Editar credenciais</button>' +
+        '<button class="btn btn-danger" onclick="handleClearCredentials()">Limpar credenciais</button>' +
+        '<button class="btn btn-success" onclick="handleUseCredentials()">Usar salvas</button>' +
       '</div><div id="credMsg" class="success-msg"></div>';
-    return;
+  } catch (e) {
+    console.error('[credentials] render error:', e, state);
+    container.innerHTML = '' +
+      '<div class="error-msg">Erro ao renderizar credenciais. Veja o console do navegador.</div>' +
+      '<div class="flex" style="margin-top:6px;">' +
+        '<button class="btn btn-warning" onclick="showCredentialsFormFn()">Editar credenciais</button>' +
+        '<button class="btn btn-secondary" onclick="loadCredentials()">Recarregar</button>' +
+      '</div><div id="credMsg" class="success-msg"></div>';
   }
-  var m = state.maskedCredentials;
-  var savedAt = state.savedAt ? new Date(state.savedAt).toLocaleString('pt-BR') : '-';
-  var lastUsedAt = state.lastUsedAt ? new Date(state.lastUsedAt).toLocaleString('pt-BR') : 'Nunca usada';
-  container.innerHTML = '' +
-    '<div style="font-size:0.82rem;margin-bottom:6px;">' +
-      '<div><strong>Token:</strong> ' + m.apiToken + '</div>' +
-      '<div><strong>Phone ID:</strong> ' + m.phoneNumberId + '</div>' +
-      '<div><strong>Business ID:</strong> ' + m.businessAccountId + '</div>' +
-      '<div><strong>Verify:</strong> ' + m.verifyToken + '</div>' +
-      '<div style="margin-top:3px;"><strong>Salvo em:</strong> ' + savedAt + '</div>' +
-      '<div><strong>Último uso:</strong> ' + lastUsedAt + '</div>' +
-    '</div>' +
-    '<div class="flex" style="margin-top:6px;">' +
-      '<button class="btn btn-warning" onclick="showCredentialsFormFn()">Editar credenciais</button>' +
-      '<button class="btn btn-danger" onclick="handleClearCredentials()">Limpar credenciais</button>' +
-      '<button class="btn btn-success" onclick="handleUseCredentials()">Usar salvas</button>' +
-    '</div><div id="credMsg" class="success-msg"></div>';
 }
 
 function showCredentialsFormFn() { showCredentialsForm = true; renderCredentials(credentialsState); }
@@ -1121,58 +1152,81 @@ async function loadCommercial() {
   try {
     commercialState = await api('GET', '/api/commercial-settings');
     renderCommercial(commercialState);
-  } catch (e) {}
+  } catch (e) {
+    console.error('[commercial] load error:', e);
+    var container = document.getElementById('commercialContent');
+    if (container) {
+      container.innerHTML = '' +
+        '<div class="error-msg">Erro ao carregar configuração comercial: ' + escapeHtml(e.message || String(e)) + '</div>' +
+        '<div class="flex" style="margin-top:6px;">' +
+          '<button class="btn btn-secondary" onclick="loadCommercial()">Tentar novamente</button>' +
+          '<button class="btn btn-warning" onclick="showCommercialFormFn()">Editar</button>' +
+        '</div><div id="comMsg" class="success-msg"></div>';
+    }
+  }
 }
 
 function renderCommercial(state) {
   var container = document.getElementById('commercialContent');
-  if (!state.hasSettings || showCommercialForm) {
+  console.log('[commercial] state:', state);
+  try {
+    state = state || { hasSettings: false };
+    if (!state.hasSettings || showCommercialForm) {
+      container.innerHTML = '' +
+        '<div style="margin-bottom:6px;font-size:0.82rem;color:#666;">Configure o produto que o bot vai vender.</div>' +
+        '<div style="margin-bottom:5px;"><label>Nome do produto</label><input type="text" id="comProductName" placeholder="Planner Estudante Pro" value="' + escapeHtml(state.settings?.productName || '') + '"></div>' +
+        '<div style="margin-bottom:5px;"><label>Preço</label><input type="text" id="comPrice" placeholder="R$ 47,00" value="' + escapeHtml(state.settings?.price || '') + '"></div>' +
+        '<div style="margin-bottom:5px;"><label>Link de checkout</label><input type="text" id="comCheckoutUrl" placeholder="https://checkout.eduzz.com/..." value="' + escapeHtml(state.settings?.checkoutUrl || '') + '"></div>' +
+        '<div style="margin-bottom:5px;"><label>Método de entrega</label><input type="text" id="comDeliveryMethod" placeholder="download" value="' + escapeHtml(state.settings?.deliveryMethod || '') + '"></div>' +
+        '<div class="flex" style="margin-top:6px;">' +
+          '<button class="btn btn-primary" onclick="handleSaveCommercial()">Salvar configurações</button>' +
+          (state.hasSettings ? '<button class="btn btn-secondary" onclick="cancelCommercialForm()">Cancelar</button>' : '') +
+        '</div><div id="comMsg" class="success-msg"></div>';
+      return;
+    }
+    var s = state.settings || {};
+    var checkoutStatus = s.checkoutStatus || 'missing';
+    var statusMap = {
+      missing: { label: 'Não configurado', className: 'tag-pending' },
+      pending_validation: { label: 'Pendente', className: 'tag-pending' },
+      validated: { label: 'Validado', className: 'tag-approved' },
+      approved: { label: 'Aprovado', className: 'tag-sale-yes' },
+      rejected: { label: 'Rejeitado', className: 'tag-sale-no' }
+    };
+    var statusInfo = statusMap[checkoutStatus] || statusMap.missing;
+    var validationHtml = s.validation ? (
+      '<div style="margin-top:6px;padding:6px;background:#f8f9fa;border-radius:4px;">' +
+        '<div><strong>Status HTTP:</strong> ' + escapeHtml(String(s.validation.statusCode || '-')) + '</div>' +
+        '<div><strong>URL final:</strong> ' + escapeHtml(s.validation.finalUrl || '-') + '</div>' +
+        '<div><strong>Domínio Cakto:</strong> ' + (s.validation.isCaktoDomain ? 'Sim' : 'Não') + '</div>' +
+        (s.validation.error ? '<div><strong>Erro:</strong> ' + escapeHtml(s.validation.error) + '</div>' : '') +
+      '</div>'
+    ) : '';
     container.innerHTML = '' +
-      '<div style="margin-bottom:6px;font-size:0.82rem;color:#666;">Configure o produto que o bot vai vender.</div>' +
-      '<div style="margin-bottom:5px;"><label>Nome do produto</label><input type="text" id="comProductName" placeholder="Planner Estudante Pro" value="' + escapeHtml(state.settings?.productName || '') + '"></div>' +
-      '<div style="margin-bottom:5px;"><label>Preço</label><input type="text" id="comPrice" placeholder="R$ 47,00" value="' + escapeHtml(state.settings?.price || '') + '"></div>' +
-      '<div style="margin-bottom:5px;"><label>Link de checkout</label><input type="text" id="comCheckoutUrl" placeholder="https://checkout.eduzz.com/..." value="' + escapeHtml(state.settings?.checkoutUrl || '') + '"></div>' +
-      '<div style="margin-bottom:5px;"><label>Método de entrega</label><input type="text" id="comDeliveryMethod" placeholder="download" value="' + escapeHtml(state.settings?.deliveryMethod || '') + '"></div>' +
+      '<div style="font-size:0.82rem;margin-bottom:6px;">' +
+        '<div><strong>Produto:</strong> ' + escapeHtml(s.productName || '-') + '</div>' +
+        '<div><strong>Preço:</strong> ' + escapeHtml(s.price || '-') + '</div>' +
+        '<div><strong>Checkout:</strong> ' + escapeHtml(s.checkoutUrl || '-') + '</div>' +
+        '<div><strong>Entrega:</strong> ' + escapeHtml(s.deliveryMethod || '-') + '</div>' +
+        '<div style="margin-top:3px;"><strong>Status:</strong> <span class="tag ' + statusInfo.className + '">' + statusInfo.label + '</span></div>' +
+        validationHtml +
+      '</div>' +
       '<div class="flex" style="margin-top:6px;">' +
-        '<button class="btn btn-primary" onclick="handleSaveCommercial()">Salvar configurações</button>' +
-        (state.hasSettings ? '<button class="btn btn-secondary" onclick="cancelCommercialForm()">Cancelar</button>' : '') +
+        '<button class="btn btn-warning" onclick="showCommercialFormFn()">Editar</button>' +
+        '<button class="btn btn-success" onclick="handleValidateCheckout()">Validar checkout</button>' +
+        (checkoutStatus === 'validated' ? '<button class="btn btn-success" onclick="handleApproveCommercial()">Aprovar</button>' : '') +
+        (checkoutStatus !== 'missing' && checkoutStatus !== 'approved' ? '<button class="btn btn-secondary" onclick="handleRejectCommercial()">Rejeitar</button>' : '') +
+        '<button class="btn btn-danger" onclick="handleResetCommercial()">Resetar</button>' +
       '</div><div id="comMsg" class="success-msg"></div>';
-    return;
+  } catch (e) {
+    console.error('[commercial] render error:', e, state);
+    container.innerHTML = '' +
+      '<div class="error-msg">Erro ao renderizar configuração comercial. Veja o console do navegador.</div>' +
+      '<div class="flex" style="margin-top:6px;">' +
+        '<button class="btn btn-warning" onclick="showCommercialFormFn()">Editar</button>' +
+        '<button class="btn btn-secondary" onclick="loadCommercial()">Recarregar</button>' +
+      '</div><div id="comMsg" class="success-msg"></div>';
   }
-  var s = state.settings;
-  var checkoutStatus = s.checkoutStatus || 'missing';
-  var statusMap = {
-    missing: { label: 'Não configurado', className: 'tag-pending' },
-    pending_validation: { label: 'Pendente', className: 'tag-pending' },
-    validated: { label: 'Validado', className: 'tag-approved' },
-    approved: { label: 'Aprovado', className: 'tag-sale-yes' },
-    rejected: { label: 'Rejeitado', className: 'tag-sale-no' }
-  };
-  var statusInfo = statusMap[checkoutStatus] || statusMap.missing;
-  var validationHtml = s.validation ? (
-    '<div style="margin-top:6px;padding:6px;background:#f8f9fa;border-radius:4px;">' +
-      '<div><strong>Status HTTP:</strong> ' + escapeHtml(String(s.validation.statusCode || '-')) + '</div>' +
-      '<div><strong>URL final:</strong> ' + escapeHtml(s.validation.finalUrl || '-') + '</div>' +
-      '<div><strong>Domínio Cakto:</strong> ' + (s.validation.isCaktoDomain ? 'Sim' : 'Não') + '</div>' +
-      (s.validation.error ? '<div><strong>Erro:</strong> ' + escapeHtml(s.validation.error) + '</div>' : '') +
-    '</div>'
-  ) : '';
-  container.innerHTML = '' +
-    '<div style="font-size:0.82rem;margin-bottom:6px;">' +
-      '<div><strong>Produto:</strong> ' + escapeHtml(s.productName || '-') + '</div>' +
-      '<div><strong>Preço:</strong> ' + escapeHtml(s.price || '-') + '</div>' +
-      '<div><strong>Checkout:</strong> ' + escapeHtml(s.checkoutUrl || '-') + '</div>' +
-      '<div><strong>Entrega:</strong> ' + escapeHtml(s.deliveryMethod || '-') + '</div>' +
-      '<div style="margin-top:3px;"><strong>Status:</strong> <span class="tag ' + statusInfo.className + '">' + statusInfo.label + '</span></div>' +
-      validationHtml +
-    '</div>' +
-    '<div class="flex" style="margin-top:6px;">' +
-      '<button class="btn btn-warning" onclick="showCommercialFormFn()">Editar</button>' +
-      '<button class="btn btn-success" onclick="handleValidateCheckout()">Validar checkout</button>' +
-      (checkoutStatus === 'validated' ? '<button class="btn btn-success" onclick="handleApproveCommercial()">Aprovar</button>' : '') +
-      (checkoutStatus !== 'missing' && checkoutStatus !== 'approved' ? '<button class="btn btn-secondary" onclick="handleRejectCommercial()">Rejeitar</button>' : '') +
-      '<button class="btn btn-danger" onclick="handleResetCommercial()">Resetar</button>' +
-    '</div><div id="comMsg" class="success-msg"></div>';
 }
 
 function showCommercialFormFn() { showCommercialForm = true; renderCommercial(commercialState); }

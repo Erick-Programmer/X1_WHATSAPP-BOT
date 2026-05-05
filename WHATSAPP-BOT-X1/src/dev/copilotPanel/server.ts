@@ -1,3 +1,4 @@
+import "../../config/env";
 import * as http from "http";
 import * as fs from "fs";
 import * as path from "path";
@@ -9,9 +10,6 @@ import { whatsappCredentials } from "../../services/whatsappCredentials";
 import { commercialSettings } from "../../services/commercialSettings";
 import { commercialConfig } from "../../config/commercial";
 import { leadStore, normalizePhone, looksLikePhone } from "../../services/leadStore";
-import * as dotenv from "dotenv";
-dotenv.config();
-
 // ─── Approved Responses (few-shot) ──────────────────────────
 const APPROVED_FILE = path.resolve(process.cwd(), "data", "approved-responses.json");
 
