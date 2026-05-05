@@ -84,10 +84,10 @@ body {
 .chat-header .ch-meta { font-size: 0.78rem; color: #666; margin-top: 2px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .chat-messages {
   background: #e5ddd5; border-radius: 8px; padding: 14px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1); max-height: 45vh; overflow-y: auto;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1); max-height: 18vh; overflow-y: auto;
   display: flex; flex-direction: column; gap: 5px;
 }
-.chat-messages.force-scroll { height: 120px; }
+.chat-messages.force-scroll { min-height: 50px; }
 .chat-message { max-width: 88%; padding: 7px 11px; border-radius: 8px; font-size: 0.82rem; line-height: 1.4; position: relative; }
 .chat-message.client { align-self: flex-start; background: #fff; border: 1px solid #e0e0e0; border-top-left-radius: 2px; }
 .chat-message .msg-time { font-size: 0.62rem; color: #999; margin-top: 2px; text-align: right; }
@@ -280,6 +280,7 @@ input[type="text"] { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4p
     <button class="fb-btn active" data-filter="active" onclick="setFilter('active')">Ativos</button>
     <button class="fb-btn" data-filter="bought" onclick="setFilter('bought')">Comprados</button>
     <button class="fb-btn" data-filter="all" onclick="setFilter('all')">Todos</button>
+    <button class="fb-btn" style="margin-left:auto;background:#e74c3c;color:#fff;border-color:#e74c3c;" onclick="deleteSelected()">🗑️ Deletar selecionados</button>
   </div>
 
   <div class="workspace-layout">
@@ -338,6 +339,27 @@ async function api(method, path, body) {
   var data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Erro desconhecido');
   return data;
+}
+
+async function deleteSelected() {
+  var checked = document.querySelectorAll('.group-checkbox:checked');
+  if (!checked.length) { alert('Selecione pelo menos um atendimento.'); return; }
+  if (!confirm('Deletar ' + checked.length + ' atendimento(s) selecionado(s)?')) return;
+  var keys = new Set(Array.from(checked).map(function(c) { return c.getAttribute('data-key'); }));
+  var allGrouped = groupReviews(allReviews);
+  for (var i = 0; i < allGrouped.length; i++) {
+    if (!keys.has(allGrouped[i][0])) continue;
+    for (var j = 0; j < allGrouped[i][1].length; j++) {
+      const id = allGrouped[i][1][j].id;
+      try {
+        const r = await api('DELETE', '/api/reviews/' + id);
+        console.log('deletado:', id, r);
+      } catch(e) {
+        console.error('erro ao deletar:', id, e);
+      }
+    }
+  }
+  await loadReviews();
 }
 
 function escapeHtml(str) {
@@ -502,7 +524,10 @@ async function injectWhatsApp(reviewId, suggestionId, phone) {
     body: JSON.stringify({ phone, text: suggestion.text })
   });
   const result = await response.json();
-  if (!result.ok) alert('Erro: ' + result.error);
+  if (!result.ok) { alert('Erro: ' + result.error); return; }
+  try { await api('POST', '/api/reviews/' + reviewId + '/manual-sent', { suggestionId }); } catch(e) {}
+  await new Promise(r => setTimeout(r, 4000)); // aguarda antes de recarregar
+  await loadReviews();
 }
 
 function renderFilterCounts(reviews) {
@@ -522,6 +547,11 @@ function renderClientList(grouped) {
     return;
   }
   var html = '';
+  // Salva checkboxes marcados antes de re-renderizar
+  var checkedKeys = new Set(
+    Array.from(document.querySelectorAll('.group-checkbox:checked'))
+      .map(function(c) { return c.getAttribute('data-key'); })
+  );
   for (var i = 0; i < grouped.length; i++) {
     var groupKey = grouped[i][0];
     var group = grouped[i][1];
@@ -530,7 +560,9 @@ function renderClientList(grouped) {
     var badgeClass = getGroupBadgeClass(group);
     var badgeLabel = getGroupBadgeLabel(group);
     var preview = info.lastMessage ? '"' + escapeHtml(info.lastMessage.substring(0, 50)) + '"' : '';
-    html += '<div class="client-list-item' + isActive + '" onclick="selectGroup(\'' + escapeHtml(groupKey) + '\')">' +
+    html += '<div class="client-list-item' + isActive + '" style="flex-direction:row;align-items:flex-start;gap:6px;">' +
+  '<input type="checkbox" class="group-checkbox" data-key="' + escapeHtml(groupKey) + '" ' + (checkedKeys.has(groupKey) ? 'checked' : '') + ' style="margin-top:3px;cursor:pointer;" onclick="event.stopPropagation()">' +
+  '<div style="flex:1;" onclick="selectGroup(\'' + escapeHtml(groupKey) + '\')">' +
       '<div class="cli-row1">' +
         '<span class="cli-name">' + escapeHtml(info.clientName) + '</span>' +
         (badgeClass ? '<span class="cli-badge ' + badgeClass + '">' + badgeLabel + '</span>' : '') +
@@ -538,7 +570,8 @@ function renderClientList(grouped) {
       '</div>' +
       (info.clientPhone ? '<div class="cli-phone">' + escapeHtml(info.clientPhone) + '</div>' : '') +
       (preview ? '<div class="cli-preview">' + preview + '</div>' : '') +
-    '</div>';
+    '</div>' +   // fecha div interno onclick
+  '</div>';      // fecha client-list-item
   }
   list.innerHTML = html;
 }
@@ -671,6 +704,17 @@ function renderConversation(grouped, groupKey) {
   mainHtml += '<div class="chat-messages' + forceScrollClass + '" id="chatMessages">';
   for (var mi = 0; mi < messages.length; mi++) {
     mainHtml += renderChatMessage(messages[mi], mi, messages.length);
+    // Se este review tem mensagem enviada, mostra ela logo após
+    var rev = messages[mi];
+    if (rev.chosenSuggestionId && rev.suggestions) {
+      var chosen = rev.suggestions.find(function(s) { return s.id === rev.chosenSuggestionId; });
+      if (chosen) {
+        mainHtml += '<div class="chat-message" style="align-self:flex-end;background:#dcf8c6;border-radius:8px;border-top-right-radius:2px;max-width:88%;">' +
+          '<div>' + escapeHtml(chosen.text) + '</div>' +
+          '<div class="msg-time">Você ✓✓</div>' +
+        '</div>';
+      }
+    }
   }
   mainHtml += '</div>';
   if (latestPending) {
@@ -701,15 +745,11 @@ function renderConversation(grouped, groupKey) {
     var chatMessages = document.getElementById('chatMessages');
     if (!chatMessages) return;
     chatMessages.scrollTop = chatMessages.scrollHeight;
-    var lastMessage = chatMessages.querySelector('.last-message');
-    if (lastMessage && lastMessage.scrollIntoView) {
-      lastMessage.scrollIntoView({ block: 'end' });
-    }
   }
-  setTimeout(scrollChatToBottom, 0);
-  setTimeout(scrollChatToBottom, 80);
-  setTimeout(scrollChatToBottom, 200);
-}
+    setTimeout(scrollChatToBottom, 0);
+    setTimeout(scrollChatToBottom, 80);
+    setTimeout(scrollChatToBottom, 200);
+  }
 
 function selectGroup(key) {
   selectedGroupKey = key;

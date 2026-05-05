@@ -1,7 +1,92 @@
-# ESTADO_SESSAO.md — X1_WHATSAPP BOT
+# ESTADO DA SESSÃO — X1_WHATSAPP BOT
 
-**Atualizado em:** 2026-05-04  
-**QA:** Claude Sonnet 4.6
+## Status atual
+Sistema funcional em produção local. Servidor: `node dist/dev/copilotPanel/server.js`. Dashboard: `http://127.0.0.1:8787`. Extensão Edge carregada em `browser-extension/`.
+
+## O que está funcionando
+- Auto-import: extensão varre lista lateral do WhatsApp Web a cada 5s e importa conversas automaticamente
+- Injeção: botão "📲 Injetar no WhatsApp" no dashboard abre a conversa, injeta o texto e envia automaticamente
+- Status: ao injetar, o review muda de `pending_review` para `sent` automaticamente
+- Mensagens enviadas aparecem em verde no chat do dashboard (via `chosenSuggestionId`), lado direito
+- Delete em lote: checkboxes na lista lateral + botão "🗑️ Deletar selecionados"
+- Checkboxes preservados no refresh do polling
+- Scroll do chat sempre vai para o final absoluto (última mensagem visível)
+
+## Arquivos principais modificados
+- `browser-extension/content.js` — auto-import, injeção, background proxy
+- `browser-extension/background.js` — proxy fetch (contorna CSP do WhatsApp)
+- `browser-extension/manifest.json` — adicionado `background.service_worker`
+- `src/dev/copilotPanel/server.ts` — rotas inject-whatsapp, pending, delete, manual-sent
+- `src/dev/copilotPanel/public/index.html` — dashboard completo
+
+## Fixes aplicados nesta sessão
+
+### Bug 1 — Mensagem do vendedor reimportada como cliente (lado esquerdo)
+**Arquivo:** `browser-extension/content.js`
+**Fix:** Se a prévia da conversa começa com `"Você:"`, pula — não importa.
+```js
+if (/^Você:/i.test(lastMessage)) continue;
+```
+
+### Bug 2 — Status não virava `sent` após injetar (polling reimportava antes)
+**Arquivo:** `src/dev/copilotPanel/public/index.html` — função `injectWhatsApp`
+**Fix:** Aguarda 4s antes de chamar `loadReviews()` após injetar.
+```js
+await new Promise(r => setTimeout(r, 4000));
+await loadReviews();
+```
+
+### Bug 3 — Reviews antigos do mesmo contato ficavam `pending_review` após envio
+**Arquivo:** `src/dev/copilotPanel/server.ts` — rota `manual-sent`
+**Fix:** Após marcar o review como `sent`, cancela todos os outros `pending_review` do mesmo contato.
+
+### Bug 4 — Mensagem enviada pelo vendedor criava novo `pending_review` no dashboard
+**Arquivo:** `src/dev/copilotPanel/server.ts` — rota `POST /api/inbox/import`
+**Fix:** Checa se o contato tem um `sent` nos últimos 30s. Se sim, retorna `skipped: recent_sent`.
+```ts
+const hasRecentSent = (existingItems as any[]).some(
+  (i) => i.contactId === contactId && i.status === "sent" &&
+  (Date.now() - new Date(i.updatedAt || 0).getTime()) < 30000
+);
+```
+
+### Bug 5 — Scroll do chat focava no contexto recente, não na última mensagem
+**Arquivo:** `src/dev/copilotPanel/public/index.html` — função `scrollChatToBottom`
+**Fix:** Removido `scrollIntoView` no `.last-message`. Usa apenas `scrollTop = scrollHeight`.
+
+### Melhoria — Altura do chat
+**Arquivo:** `src/dev/copilotPanel/public/index.html` — CSS `.chat-messages`
+**Fix:** `max-height: 45vh` → `65vh`. `force-scroll` de `height: 120px` → `min-height: 120px`.
+
+## Próximo foco
+1. **[TESTE]** Validar todos os fixes acima em conversa real com cliente
+2. **[CONFIG]** Preencher `.env` com preço + link Cakto
+3. **[GO LIVE]** Integração WhatsApp Business API real
+
+## ESTADO DOS ARQUIVOS CRÍTICOS
+
+| Arquivo | Status |
+|---------|--------|
+| `dist/dev/copilotPanel/server.js` | ⚠️ Precisa rebuild após fixes no server.ts |
+| `src/dev/copilotPanel/public/index.html` | ✅ Atualizado |
+| `browser-extension/content.js` | ✅ Atualizado |
+| `src/dev/copilotPanel/server.ts` | ✅ Atualizado |
+| `assets/produto-planners.png` | ❓ A verificar |
+| `assets/ebooks-bonus.png` | ❓ A verificar |
+| `.env` (credenciais reais) | ❌ Não configurado (aguarda aprovação) |
+
+## COMO RODAR AGORA
+
+```powershell
+# Na pasta WHATSAPP-BOT-X1:
+npm run build
+node dist/dev/copilotPanel/server.js
+# Abre http://127.0.0.1:8787 no Edge
+```
+
+**Instalar extensão Edge:**
+1. `edge://extensions/` → Modo desenvolvedor ON
+2. "Carregar extensão" → selecionar pasta `browser-extension/`
 
 ---
 
@@ -33,50 +118,15 @@ Produto sendo vendido: **Planner Estudante Pro** — 10 planners + 3 ebooks bôn
 - [x] `data/leads.json` criado — importação de leads funcionando
 - [x] Polling de leads na extensão (`scanAndHighlight` a cada 5s)
 - [x] Toggle Liga/Desliga leads no popup (`btnPolling`)
+- [x] Auto-import de conversas via extensão
+- [x] Injeção de mensagem via dashboard → WhatsApp Web
+- [x] Bolha verde para mensagens enviadas (lado direito)
+- [x] Fix: mensagem do vendedor não cria pending_review
+- [x] Fix: reviews antigos cancelados ao enviar
+- [x] Fix: scroll sempre vai para o final do chat
+- [x] Fix: delay de 4s após injetar antes de recarregar reviews
 
 ---
 
-## TASK PENDENTE ATUAL ⏳
-
-### Testar polling de leads end-to-end
-
-1. Recarregar extensão em `edge://extensions/`
-2. Servidor rodando em `127.0.0.1:8787`
-3. Clicar ⚪ Leads OFF → virar 🟢 Leads ON
-4. Confirmar borda verde nas conversas que são leads
-
----
-
-## PRÓXIMOS PASSOS
-
-1. **[TESTE]** Validar polling de leads visualmente no WhatsApp Web
-2. **[CONFIG]** Preencher `.env` com preço + link Cakto
-3. **[GO LIVE]** Integração WhatsApp Business API real
-
----
-
-## ESTADO DOS ARQUIVOS CRÍTICOS
-
-| Arquivo | Status |
-|---------|--------|
-| `dist/dev/copilotPanel/server.js` | ✅ Compilado |
-| `src/dev/copilotPanel/public/index.html` | ❓ A verificar |
-| `browser-extension/` (4 arquivos) | ✅ Pronto para instalação |
-| `assets/produto-planners.png` | ❓ A verificar |
-| `assets/ebooks-bonus.png` | ❓ A verificar |
-| `.env` (credenciais reais) | ❌ Não configurado (aguarda aprovação) |
-
----
-
-## COMO RODAR AGORA
-
-```powershell
-# Na pasta WHATSAPP-BOT-X1:
-npm run build
-node dist/dev/copilotPanel/server.js
-# Abre http://127.0.0.1:8787 no Edge
-```
-
-**Instalar extensão Edge:**
-1. `edge://extensions/` → Modo desenvolvedor ON
-2. "Carregar extensão" → selecionar pasta `browser-extension/`
+**Atualizado em:** 2026-05-04  
+**QA:** Claude Sonnet 4.6

@@ -747,8 +747,7 @@
       // Ignorar se lastMessage parece horário ou número puro
       if (/^\d{1,2}:\d{2}$/.test(lastMessage)) continue;
       if (/^\d{10,}$/.test(lastMessage)) continue;
-      if (/^Você:/i.test(lastMessage)) lastMessage = texts[texts.length - 2] || "";
-      if (!lastMessage || lastMessage === contactName) continue;
+      if (/^Você:/i.test(lastMessage)) continue; // se a última msg é sua, pula — não importa
       const cacheKey = `${contactName}::${lastMessage}`;
       if (importedCache.has(cacheKey)) continue;
       importedCache.add(cacheKey);
@@ -785,78 +784,55 @@
   // ─── Injetar texto na conversa por telefone ────────────────
   async function openConversationAndInject(phone, text) {
     const digits = phone.replace(/\D/g, "");
-    console.log('[INJECT] iniciando para:', digits, 'texto:', text.slice(0,20));
 
-    const input = document.querySelector('input[aria-label="Pesquisar ou começar uma nova conversa"]');
-    console.log('[INJECT] input encontrado:', !!input);
+    // 1. Pega o input de busca
+    const input = document.querySelector('input[type="text"][aria-label]');
     if (!input) return { ok: false, error: "Campo de busca não encontrado." };
 
+    // 2. Limpa e digita o número
     input.focus();
     input.click();
     await new Promise(r => setTimeout(r, 300));
-
-    // 2. Limpa e digita o número
+    input.select();
+    document.execCommand("selectAll", false, null);
+    document.execCommand("delete", false, null);
     input.value = "";
+    await new Promise(r => setTimeout(r, 200));
     document.execCommand("insertText", false, digits);
-    await new Promise(r => setTimeout(r, 1500));
+    await new Promise(r => setTimeout(r, 2000));
 
-    // 3. Clica no primeiro resultado
-    // Aguarda resultados renderizarem
-    await new Promise(r => setTimeout(r, 1500));
-    const allResults = document.querySelectorAll('div[role="listitem"], div[role="row"]');
-    
-    let firstResult = null;
-    for (let i = 0; i < allResults.length; i++) {
-      const txt = allResults[i].textContent.replace(/\D/g,'');
-      if (txt.includes(digits.slice(-8))) {
-        firstResult = allResults[i];
-        break;
-      }
-    }
-    // Fallback: pega o segundo elemento (índice 1) se não achou pelo número
-    if (!firstResult && allResults.length > 1) {
-      firstResult = allResults[1];
-    }
+    // 3. ArrowDown + Enter para abrir a conversa
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', keyCode: 40, bubbles: true }));
+    await new Promise(r => setTimeout(r, 300));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+    await new Promise(r => setTimeout(r, 1000));
 
-    if (!firstResult) {
-      // Limpa busca e sai
-      input.value = "";
+    // 4. Injeta o texto
+    const box = document.querySelector('[data-testid="conversation-compose-box-input"]');
+    if (!box) return { ok: false, error: "Campo de mensagem não encontrado." };
+
+    await new Promise(r => setTimeout(r, 300));
+    // Limpa o campo antes de injetar
+    box.focus();
+    document.execCommand('selectAll', false, null);
+    document.execCommand('delete', false, null);
+    await new Promise(r => setTimeout(r, 200));
+    document.execCommand('insertText', false, text);
+    await new Promise(r => setTimeout(r, 500));
+
+    // Envia a mensagem
+    const sendBtn = document.querySelector('[data-testid="send"], [aria-label*="Enviar"], [data-icon="send"]');
+    if (sendBtn) sendBtn.click();
+    await new Promise(r => setTimeout(r, 500));
+
+    // Limpa o filtro de busca
+    const inputSearch = document.querySelector('input[type="text"][aria-label]');
+    if (inputSearch) {
+      inputSearch.select();
       document.execCommand("selectAll", false, null);
       document.execCommand("delete", false, null);
-      return { ok: false, error: "Nenhum resultado encontrado para " + digits };
+      inputSearch.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     }
-
-    console.log('[INJECT] firstResult:', firstResult ? firstResult.textContent.slice(0,50) : 'null');
-
-    // Clica na conversa
-    firstResult.click();
-
-    // Limpa o campo de busca
-    await new Promise(r => setTimeout(r, 300));
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-
-    // Aguarda a conversa NOVA carregar verificando o aria-label do box
-    let box = null;
-    for (let i = 0; i < 20; i++) {
-      await new Promise(r => setTimeout(r, 200));
-      const candidate = document.querySelector('[data-testid="conversation-compose-box-input"]');
-      if (candidate && candidate.getAttribute('aria-label') && candidate.getAttribute('aria-label').includes(digits.slice(-8))) {
-        box = candidate;
-        break;
-      }
-    }
-    // Fallback: pega qualquer box disponível
-    if (!box) {
-      await new Promise(r => setTimeout(r, 1000));
-      box = document.querySelector('[data-testid="conversation-compose-box-input"]');
-    }
-    if (!box) return { ok: false, error: "Campo de texto não encontrado." };
-
-    await new Promise(r => setTimeout(r, 200));
-    console.log('[INJECT] box encontrado:', !!box, box ? box.getAttribute('aria-label') : '');    
-    box.focus();
-    box.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }));
-    document.execCommand('insertText', false, text);
 
     return { ok: true };
   }

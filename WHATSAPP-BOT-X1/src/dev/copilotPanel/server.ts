@@ -172,7 +172,17 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         jsonResponse(res, 200, { skipped: true, reason: "duplicate" });
         return;
       }
-
+      
+      // Ignorar se o contato já tem sent recente (evita reimportar mensagem enviada pelo vendedor)
+      const hasRecentSent = (existingItems as any[]).some(
+        (i) => i.contactId === contactId && i.status === "sent" &&
+        (Date.now() - new Date(i.updatedAt || i.createdAt || 0).getTime()) < 30000
+      );
+      if (hasRecentSent) {
+        jsonResponse(res, 200, { skipped: true, reason: "recent_sent" });
+        return;
+      }
+      
       const messageId = `msg_import_${Date.now()}`;
 
       const intentResult = classifyIntent(lastMessage);
@@ -346,6 +356,17 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       try {
         reviewQueue.markManualSent(reviewId, suggestionId);
         const updated = reviewQueue.getReviewItem(reviewId);
+
+        // Cancelar todos os outros pending_review do mesmo contato
+        const allItems = Array.from(
+          (reviewQueue as unknown as { items: Map<string, unknown> }).items.values()
+        ) as Array<{ id: string; contactId: string; status: string }>;
+        for (const item of allItems) {
+          if (item.id !== reviewId && item.contactId === updated!.contactId && item.status === "pending_review") {
+            reviewQueue.cancelReview(item.id);
+          }
+        }
+
         jsonResponse(res, 200, {
           reviewId: updated!.id,
           status: updated!.status,
