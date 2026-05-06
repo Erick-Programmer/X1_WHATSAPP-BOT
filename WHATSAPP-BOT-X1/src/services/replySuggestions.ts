@@ -279,8 +279,11 @@ export function generateFlowContinuationSuggestions(
   round: number = 1
 ): ReplySuggestion[] {
   const config = commercialSettings.getEffectiveConfig();
+  const recoveryConfig = commercialSettings.getRecoveryConfig();
   const price = config.price;
   const checkout = config.isCheckoutConfigured ? config.checkoutUrl : "";
+  const recoveryPrice = recoveryConfig.price;
+  const recoveryCheckout = recoveryConfig.isCheckoutConfigured ? recoveryConfig.checkoutUrl : "";
   const templates: Record<string, string[][]> = {
     presentation: [
       [
@@ -329,6 +332,19 @@ export function generateFlowContinuationSuggestions(
           : `Quer garantir o acesso ao pacote completo? Posso te passar as informacoes agora.`,
       ],
     ],
+    recovery: [
+      [
+        recoveryCheckout
+          ? `Se o valor normal ficou pesado, consigo liberar uma condicao menor por ${recoveryPrice}. Quer que eu te mande esse link?`
+          : `Se o valor normal ficou pesado, posso ver uma condicao menor para voce. Quer que eu te explique?`,
+        recoveryCheckout
+          ? `Pra facilitar sua decisao, deixei uma opcao especial por ${recoveryPrice}. Se fizer sentido, te mando o link.`
+          : `Pra facilitar sua decisao, consigo te passar uma opcao mais leve. Se fizer sentido, me fala.`,
+        recoveryCheckout
+          ? `Se ainda tiver interesse, consigo te mandar o acesso com uma condicao de ${recoveryPrice}. Quer ver?`
+          : `Se ainda tiver interesse, posso te passar uma condicao melhor para acessar o kit.`,
+      ],
+    ],
   };
 
   const normalizedStage = templates[stage] ? stage : "followup";
@@ -353,18 +369,25 @@ export async function generateFlowContinuationSuggestionsSmart(
   history: string[] = [],
   round: number = 1
 ): Promise<ReplySuggestion[]> {
+  const recoveryConfig = commercialSettings.getRecoveryConfig();
   const stagePromptMap: Record<string, string> = {
     presentation: "Continue a venda apresentando o Planner Estudante Pro de forma natural e curta.",
     product: "Continue a venda mostrando o que vem no pacote: 10 planners digitais e 3 ebooks bonus.",
     price: "Continue a venda falando o valor normal e o checkout, sem oferecer recuperacao nem desconto.",
     close: "Continue a venda pedindo fechamento de forma leve, humana e objetiva.",
     followup: "Continue a conversa com um follow-up natural para tirar duvida e retomar interesse.",
+    recovery: "Continue a venda com uma recuperacao suave. Se o cliente ja recebeu valor e sumiu, ofereca uma condicao menor sem parecer pressao.",
   };
   const stagePrompt = stagePromptMap[stage] || stagePromptMap.followup;
   const aiHistory = [
     ...history.slice(-6),
     `Tarefa do vendedor: ${stagePrompt}`,
-    "Gere 3 opcoes curtas, humanas e prontas para WhatsApp. Nao invente desconto. Nao fale em equipe ou suporte.",
+    stage === "recovery" && recoveryConfig.isCheckoutConfigured
+      ? `Condicao de recuperacao configurada: ${recoveryConfig.price}. Link: ${recoveryConfig.checkoutUrl}`
+      : "",
+    stage === "recovery"
+      ? "Gere 3 opcoes curtas, humanas e prontas para WhatsApp. Use apenas a condicao de recuperacao configurada, sem inventar outros descontos. Nao fale em equipe ou suporte."
+      : "Gere 3 opcoes curtas, humanas e prontas para WhatsApp. Nao invente desconto. Nao fale em equipe ou suporte.",
   ];
 
   const aiSuggestions = await generateSuggestionsDeepSeek(Intent.Unknown, aiHistory, round);

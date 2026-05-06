@@ -68,7 +68,13 @@ body {
 .client-list-item .cli-row1 { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
 .client-list-item .cli-name { font-weight: 600; font-size: 0.85rem; color: #0f3460; }
 .client-list-item .cli-phone { font-size: 0.72rem; color: #888; }
+.client-list-item .cli-time { font-size: 0.68rem; color: #0f3460; margin-top: 2px; }
 .client-list-item .cli-badge { font-size: 0.62rem; padding: 1px 6px; border-radius: 3px; font-weight: 600; margin-left: auto; }
+.priority-badge { font-size: 0.62rem; padding: 1px 6px; border-radius: 3px; background: #eef1f5; color: #555; font-weight: 600; }
+.priority-reply { background: #fef3cd; color: #856404; }
+.priority-followup { background: #cce5ff; color: #004085; }
+.priority-recovery { background: #f8d7da; color: #721c24; }
+.priority-wait { background: #e2e3e5; color: #383d41; }
 .client-list-item .cli-badge.pending { background: #fef3cd; color: #856404; }
 .client-list-item .cli-badge.sent { background: #cce5ff; color: #004085; }
 .client-list-item .cli-badge.bought { background: #d4edda; color: #155724; border: 1px solid #155724; }
@@ -82,6 +88,9 @@ body {
 .chat-header { background: #fff; border-radius: 8px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
 .chat-header .ch-name { font-size: 1rem; font-weight: 700; color: #0f3460; }
 .chat-header .ch-meta { font-size: 0.78rem; color: #666; margin-top: 2px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.time-radar { background: #fff; border-radius: 8px; padding: 10px 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-size: 0.78rem; color: #555; }
+.time-radar strong { color: #0f3460; }
+.time-radar-row { margin-top: 3px; }
 .chat-messages {
   background: #e5ddd5; border-radius: 8px; padding: 14px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow-y: auto;
@@ -331,6 +340,11 @@ input[type="text"] { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4p
     <button class="fb-btn active" data-filter="active" onclick="setFilter('active')">Ativos</button>
     <button class="fb-btn" data-filter="bought" onclick="setFilter('bought')">Comprados</button>
     <button class="fb-btn" data-filter="all" onclick="setFilter('all')">Todos</button>
+    <button class="fb-btn active" data-priority="all" onclick="setPriorityFilter('all')">Prioridade: Todas</button>
+    <button class="fb-btn" data-priority="reply" onclick="setPriorityFilter('reply')">Responder agora</button>
+    <button class="fb-btn" data-priority="followup" onclick="setPriorityFilter('followup')">Follow-up hoje</button>
+    <button class="fb-btn" data-priority="recovery" onclick="setPriorityFilter('recovery')">Recuperar</button>
+    <button class="fb-btn" data-priority="wait" onclick="setPriorityFilter('wait')">Aguardar</button>
     <button class="fb-btn" onclick="selectVisibleGroups()">Selecionar visíveis</button>
     <button class="fb-btn" onclick="clearVisibleSelection()">Limpar seleção</button>
     <button class="fb-btn" style="margin-left:auto;background:#e74c3c;color:#fff;border-color:#e74c3c;" onclick="deleteSelected()">🗑️ Deletar selecionados</button>
@@ -348,6 +362,7 @@ input[type="text"] { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4p
 const API = '';
 let currentAdminPanel = null;
 let filterMode = 'active';
+let priorityMode = 'all';
 let selectedGroupKey = null;
 let allReviews = [];
 let allGroupedReviews = [];
@@ -390,8 +405,17 @@ function toggleAdminPanel(panelId) {
 
 function setFilter(mode) {
   filterMode = mode;
-  document.querySelectorAll('.fb-btn').forEach(function(b) { b.classList.remove('active'); });
-  document.querySelector('.fb-btn[data-filter="' + mode + '"]').classList.add('active');
+  document.querySelectorAll('.fb-btn[data-filter]').forEach(function(b) { b.classList.remove('active'); });
+  var btn = document.querySelector('.fb-btn[data-filter="' + mode + '"]');
+  if (btn) btn.classList.add('active');
+  renderReviews(allReviews);
+}
+
+function setPriorityFilter(mode) {
+  priorityMode = mode;
+  document.querySelectorAll('.fb-btn[data-priority]').forEach(function(b) { b.classList.remove('active'); });
+  var btn = document.querySelector('.fb-btn[data-priority="' + mode + '"]');
+  if (btn) btn.classList.add('active');
   renderReviews(allReviews);
 }
 
@@ -481,6 +505,76 @@ function groupHasSale(group) {
   return group.some(function(r) { return r.saleOutcome && r.saleOutcome.sale === true; });
 }
 
+function getReviewTime(r) {
+  return new Date(r.receivedAt || r.createdAt || r.updatedAt || Date.now()).getTime();
+}
+
+function getSentTime(r) {
+  return new Date(r.updatedAt || r.createdAt || Date.now()).getTime();
+}
+
+function isFlowSynthetic(r) {
+  var msg = (r.customerMessage || '').toLowerCase();
+  return msg.indexOf('sugestao de proximo passo:') === 0 || msg.indexOf('continuar fluxo manual:') === 0;
+}
+
+function formatAge(ms) {
+  if (!ms || ms < 0) return 'agora';
+  var min = Math.floor(ms / 60000);
+  if (min < 1) return 'agora';
+  if (min < 60) return 'há ' + min + 'min';
+  var h = Math.floor(min / 60);
+  if (h < 24) return 'há ' + h + 'h';
+  var d = Math.floor(h / 24);
+  return 'há ' + d + ' dia' + (d > 1 ? 's' : '');
+}
+
+function getChosenText(r) {
+  if (!r.chosenSuggestionId || !r.suggestions) return '';
+  var chosen = r.suggestions.find(function(s) { return s.id === r.chosenSuggestionId; });
+  return chosen ? chosen.text || '' : '';
+}
+
+function getGroupTiming(group) {
+  var realClient = group.filter(function(r) { return !isFlowSynthetic(r); })
+    .sort(function(a, b) { return getReviewTime(b) - getReviewTime(a); });
+  var sent = group.filter(function(r) { return r.status === 'sent'; })
+    .sort(function(a, b) { return getSentTime(b) - getSentTime(a); });
+  var lastClient = realClient[0] || group[0];
+  var lastSent = sent[0] || null;
+  return {
+    lastClient: lastClient,
+    lastSent: lastSent,
+    lastClientAgeMs: lastClient ? Date.now() - getReviewTime(lastClient) : null,
+    lastSentAgeMs: lastSent ? Date.now() - getSentTime(lastSent) : null,
+    lastSentText: lastSent ? getChosenText(lastSent) : ''
+  };
+}
+
+function getGroupPriority(group) {
+  if (group.some(function(r) { return r.status === 'pending_review'; })) {
+    return { key: 'reply', label: 'Responder agora', className: 'priority-reply', reason: 'cliente tem mensagem pendente' };
+  }
+  if (groupHasSale(group)) {
+    return { key: 'wait', label: 'Aguardar', className: 'priority-wait', reason: 'cliente já comprou' };
+  }
+  var timing = getGroupTiming(group);
+  if (!timing.lastSent) {
+    return { key: 'wait', label: 'Aguardar', className: 'priority-wait', reason: 'sem resposta enviada ainda' };
+  }
+  var sentHours = (timing.lastSentAgeMs || 0) / 36e5;
+  var allText = group.map(function(r) { return (r.customerMessage || '') + ' ' + getChosenText(r); }).join(' ').toLowerCase();
+  var hasPrice = /r\$\s*27|27 reais|valor|preço|preco/.test(allText);
+  var hasProduct = /10 planners|3 ebooks|kit digital|planner estudante pro/.test(allText);
+  if (hasPrice && sentHours >= 20) {
+    return { key: 'recovery', label: 'Recuperar', className: 'priority-recovery', reason: 'valor enviado há ' + formatAge(timing.lastSentAgeMs) };
+  }
+  if ((hasPrice || hasProduct) && sentHours >= 2) {
+    return { key: 'followup', label: 'Follow-up hoje', className: 'priority-followup', reason: 'você respondeu ' + formatAge(timing.lastSentAgeMs) };
+  }
+  return { key: 'wait', label: 'Aguardar', className: 'priority-wait', reason: 'você respondeu ' + formatAge(timing.lastSentAgeMs) };
+}
+
 function groupReviews(reviews) {
   var groups = new Map();
   for (var i = 0; i < reviews.length; i++) {
@@ -495,7 +589,13 @@ function groupReviews(reviews) {
     });
   }
   var sorted = Array.from(groups.entries());
+  var priorityOrder = { reply: 0, followup: 1, recovery: 2, wait: 3 };
   sorted.sort(function(a, b) {
+    var aKey = getGroupPriority(a[1]).key;
+    var bKey = getGroupPriority(b[1]).key;
+    var ap = Object.prototype.hasOwnProperty.call(priorityOrder, aKey) ? priorityOrder[aKey] : 99;
+    var bp = Object.prototype.hasOwnProperty.call(priorityOrder, bKey) ? priorityOrder[bKey] : 99;
+    if (ap !== bp) return ap - bp;
     var aP = a[1].some(function(r) { return r.status === 'pending_review'; });
     var bP = b[1].some(function(r) { return r.status === 'pending_review'; });
     if (aP && !bP) return -1;
@@ -533,6 +633,39 @@ function getGroupBadgeLabel(group) {
 }
 
 function filterReviews(reviews) {
+  var baseReviews = reviews;
+  var grouped = new Map();
+  for (var i = 0; i < baseReviews.length; i++) {
+    var r = baseReviews[i];
+    var key = computeGroupKey(r);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(r);
+  }
+  var filtered = [];
+  for (var g of grouped) {
+    var hasSale = groupHasSale(g[1]);
+    if (filterMode === 'all') { filtered.push.apply(filtered, g[1]); }
+    else if (filterMode === 'active' && !hasSale) { filtered.push.apply(filtered, g[1]); }
+    else if (filterMode === 'bought' && hasSale) { filtered.push.apply(filtered, g[1]); }
+  }
+  if (priorityMode === 'all') return filtered;
+  var priorityGrouped = new Map();
+  for (var j = 0; j < filtered.length; j++) {
+    var pr = filtered[j];
+    var pkey = computeGroupKey(pr);
+    if (!priorityGrouped.has(pkey)) priorityGrouped.set(pkey, []);
+    priorityGrouped.get(pkey).push(pr);
+  }
+  var priorityFiltered = [];
+  for (var pg of priorityGrouped) {
+    if (getGroupPriority(pg[1]).key === priorityMode) {
+      priorityFiltered.push.apply(priorityFiltered, pg[1]);
+    }
+  }
+  return priorityFiltered;
+}
+
+function filterReviewsBySaleOnly(reviews) {
   if (filterMode === 'all') return reviews;
   var grouped = new Map();
   for (var i = 0; i < reviews.length; i++) {
@@ -544,8 +677,8 @@ function filterReviews(reviews) {
   var filtered = [];
   for (var g of grouped) {
     var hasSale = groupHasSale(g[1]);
-    if (filterMode === 'active' && !hasSale) { filtered.push.apply(filtered, g[1]); }
-    else if (filterMode === 'bought' && hasSale) { filtered.push.apply(filtered, g[1]); }
+    if (filterMode === 'active' && !hasSale) filtered.push.apply(filtered, g[1]);
+    if (filterMode === 'bought' && hasSale) filtered.push.apply(filtered, g[1]);
   }
   return filtered;
 }
@@ -581,6 +714,22 @@ function getFilterCounts(reviews) {
     boughtPending: boughtPending,
     allPending: activePending + boughtPending
   };
+}
+
+function getPriorityCounts(reviews) {
+  var grouped = new Map();
+  for (var i = 0; i < reviews.length; i++) {
+    var r = reviews[i];
+    var key = computeGroupKey(r);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(r);
+  }
+  var counts = { reply: 0, followup: 0, recovery: 0, wait: 0, all: grouped.size };
+  for (var g of grouped) {
+    var p = getGroupPriority(g[1]).key;
+    counts[p] = (counts[p] || 0) + 1;
+  }
+  return counts;
 }
 
 async function injectWhatsApp(reviewId, suggestionId, phone) {
@@ -625,12 +774,23 @@ async function injectWhatsAppEdited(reviewId, suggestionId, phone) {
 
 function renderFilterCounts(reviews) {
   var counts = getFilterCounts(reviews || []);
+  var priorityCounts = getPriorityCounts(filterMode === 'all' ? (reviews || []) : filterReviewsBySaleOnly(reviews || []));
   var activeBtn = document.querySelector('.fb-btn[data-filter="active"]');
   var boughtBtn = document.querySelector('.fb-btn[data-filter="bought"]');
   var allBtn = document.querySelector('.fb-btn[data-filter="all"]');
   if (activeBtn) activeBtn.textContent = 'Ativos (' + counts.activePending + ')';
   if (boughtBtn) boughtBtn.textContent = 'Comprados (' + counts.boughtPending + ')';
   if (allBtn) allBtn.textContent = 'Todos (' + counts.allPending + ')';
+  var pAll = document.querySelector('.fb-btn[data-priority="all"]');
+  var pReply = document.querySelector('.fb-btn[data-priority="reply"]');
+  var pFollow = document.querySelector('.fb-btn[data-priority="followup"]');
+  var pRecovery = document.querySelector('.fb-btn[data-priority="recovery"]');
+  var pWait = document.querySelector('.fb-btn[data-priority="wait"]');
+  if (pAll) pAll.textContent = 'Prioridade: Todas (' + priorityCounts.all + ')';
+  if (pReply) pReply.textContent = 'Responder agora (' + priorityCounts.reply + ')';
+  if (pFollow) pFollow.textContent = 'Follow-up hoje (' + priorityCounts.followup + ')';
+  if (pRecovery) pRecovery.textContent = 'Recuperar (' + priorityCounts.recovery + ')';
+  if (pWait) pWait.textContent = 'Aguardar (' + priorityCounts.wait + ')';
 }
 
 function renderClientList(grouped) {
@@ -652,6 +812,8 @@ function renderClientList(grouped) {
     var isActive = selectedGroupKey === groupKey ? ' active' : '';
     var badgeClass = getGroupBadgeClass(group);
     var badgeLabel = getGroupBadgeLabel(group);
+    var priority = getGroupPriority(group);
+    var timing = getGroupTiming(group);
     var preview = info.lastMessage ? '"' + escapeHtml(info.lastMessage.substring(0, 50)) + '"' : '';
     html += '<div class="client-list-item' + isActive + '" style="flex-direction:row;align-items:flex-start;gap:6px;">' +
   '<input type="checkbox" class="group-checkbox" data-key="' + escapeHtml(groupKey) + '" ' + (checkedKeys.has(groupKey) ? 'checked' : '') + ' style="margin-top:3px;cursor:pointer;" onclick="event.stopPropagation()">' +
@@ -662,6 +824,8 @@ function renderClientList(grouped) {
         '<span class="cli-count">' + info.total + '</span>' +
       '</div>' +
       (info.clientPhone ? '<div class="cli-phone">' + escapeHtml(info.clientPhone) + '</div>' : '') +
+      '<div><span class="priority-badge ' + priority.className + '">' + priority.label + '</span></div>' +
+      '<div class="cli-time">' + (timing.lastSent ? 'Você respondeu ' + formatAge(timing.lastSentAgeMs) : 'Último cliente ' + formatAge(timing.lastClientAgeMs)) + '</div>' +
       (preview ? '<div class="cli-preview">' + preview + '</div>' : '') +
     '</div>' +   // fecha div interno onclick
   '</div>';      // fecha client-list-item
@@ -832,6 +996,8 @@ function renderConversation(grouped, groupKey) {
   var hasBought = groupHasSale(group);
   var badgeClass = getGroupBadgeClass(group);
   var badgeLabel = getGroupBadgeLabel(group);
+  var priority = getGroupPriority(group);
+  var timing = getGroupTiming(group);
   var messages = [].concat(group).reverse();
   var pendingReviews = group.filter(function(r) { return r.status === 'pending_review'; });
   var latestPending = pendingReviews.length > 0 ? pendingReviews[0] : null;
@@ -847,6 +1013,7 @@ function renderConversation(grouped, groupKey) {
     '<div class="ch-meta">' +
       (info.clientPhone ? '📞 ' + escapeHtml(info.clientPhone) : '') +
       (badgeClass ? ' <span class="tag tag-' + badgeClass + '">' + badgeLabel + '</span>' : '') +
+      ' <span class="priority-badge ' + priority.className + '">' + priority.label + '</span>' +
       ' <span class="cli-count">' + info.total + ' mensagens</span>' +
       (info.latestManualStatus ? manualStatusTag(info.latestManualStatus) : '') +
     '</div></div>';
@@ -873,6 +1040,13 @@ function renderConversation(grouped, groupKey) {
     mainHtml += renderNoPendingSection(group);
   }
   var sideHtml = '';
+  sideHtml += '<div class="time-radar">' +
+    '<strong>Radar de tempo</strong>' +
+    '<div class="time-radar-row">Próxima ação: <span class="priority-badge ' + priority.className + '">' + priority.label + '</span></div>' +
+    '<div class="time-radar-row">Motivo: ' + escapeHtml(priority.reason) + '</div>' +
+    (timing.lastSent ? '<div class="time-radar-row">Você respondeu ' + formatAge(timing.lastSentAgeMs) + '</div>' : '') +
+    (timing.lastClient ? '<div class="time-radar-row">Última msg cliente ' + formatAge(timing.lastClientAgeMs) + '</div>' : '') +
+  '</div>';
   if (latestReview) {
     sideHtml += renderLeadStatusCompact(latestReview);
   }

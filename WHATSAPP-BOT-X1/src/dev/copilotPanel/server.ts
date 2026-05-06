@@ -65,6 +65,17 @@ function inferNextFlowStage(items: ReviewItem[]): { stage: string; reason: strin
     })
     .join(" ")
     .toLowerCase();
+  const lastSent = sorted
+    .slice()
+    .reverse()
+    .find((item) => item.status === "sent");
+  const hoursSinceLastSent = lastSent
+    ? (Date.now() - new Date(lastSent.updatedAt || lastSent.createdAt).getTime()) / 36e5
+    : null;
+  const hasPrice = /r\$\s*27|27 reais|pre[cÃ§]o|valor/.test(allText);
+  if (last && hasPrice && hoursSinceLastSent !== null && hoursSinceLastSent >= 20) {
+    return { stage: "recovery", reason: "cliente ja recebeu valor e ficou quase um dia sem resposta, pode avaliar recuperacao" };
+  }
 
   if (!last) {
     return { stage: "presentation", reason: "sem historico suficiente, melhor apresentar com leveza" };
