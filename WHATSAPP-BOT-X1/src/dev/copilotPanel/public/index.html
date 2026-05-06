@@ -277,6 +277,10 @@ input[type="text"] { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4p
           <div><label>Delay mín. (s)</label><input type="number" id="campaignMinDelay" value="45" min="5"></div>
           <div><label>Delay máx. (s)</label><input type="number" id="campaignMaxDelay" value="120" min="5"></div>
         </div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;margin:4px 0 8px;color:#7a4b00;">
+          <input type="checkbox" id="campaignAllowResendForTest">
+          Modo teste: permitir reenviar para número já abordado
+        </label>
         <div class="flex">
           <button class="btn btn-primary" onclick="prepareCampaign()">Preparar campanha</button>
           <button class="btn btn-success" onclick="startCampaign()">Iniciar envio</button>
@@ -327,6 +331,8 @@ input[type="text"] { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4p
     <button class="fb-btn active" data-filter="active" onclick="setFilter('active')">Ativos</button>
     <button class="fb-btn" data-filter="bought" onclick="setFilter('bought')">Comprados</button>
     <button class="fb-btn" data-filter="all" onclick="setFilter('all')">Todos</button>
+    <button class="fb-btn" onclick="selectVisibleGroups()">Selecionar visíveis</button>
+    <button class="fb-btn" onclick="clearVisibleSelection()">Limpar seleção</button>
     <button class="fb-btn" style="margin-left:auto;background:#e74c3c;color:#fff;border-color:#e74c3c;" onclick="deleteSelected()">🗑️ Deletar selecionados</button>
   </div>
 
@@ -387,6 +393,14 @@ function setFilter(mode) {
   document.querySelectorAll('.fb-btn').forEach(function(b) { b.classList.remove('active'); });
   document.querySelector('.fb-btn[data-filter="' + mode + '"]').classList.add('active');
   renderReviews(allReviews);
+}
+
+function selectVisibleGroups() {
+  document.querySelectorAll('.group-checkbox').forEach(function(c) { c.checked = true; });
+}
+
+function clearVisibleSelection() {
+  document.querySelectorAll('.group-checkbox').forEach(function(c) { c.checked = false; });
 }
 
 async function api(method, path, body) {
@@ -583,7 +597,7 @@ async function injectWhatsApp(reviewId, suggestionId, phone) {
   });
   const result = await response.json();
   if (!result.ok) { alert('Erro: ' + result.error); return; }
-  try { await api('POST', '/api/reviews/' + reviewId + '/manual-sent', { suggestionId }); } catch(e) {}
+  try { await api('POST', '/api/reviews/' + reviewId + '/manual-sent', { suggestionId: suggestionId }); } catch(e) {}
   await new Promise(r => setTimeout(r, 4000)); // aguarda antes de recarregar
   await loadReviews();
 }
@@ -604,7 +618,7 @@ async function injectWhatsAppEdited(reviewId, suggestionId, phone) {
   });
   const result = await response.json();
   if (!result.ok) { alert('Erro: ' + result.error); return; }
-  try { await api('POST', '/api/reviews/' + reviewId + '/manual-sent', { suggestionId }); } catch(e) {}
+  try { await api('POST', '/api/reviews/' + reviewId + '/manual-sent', { suggestionId: suggestionId, text: editedText }); } catch(e) {}
   await new Promise(r => setTimeout(r, 4000));
   await loadReviews();
 }
@@ -673,18 +687,30 @@ function renderPendingSection(review, group) {
   var hasValidPhone = contactPhoneDigits.length >= 10;
   var pendingReviews = group.filter(function(r) { return r.status === 'pending_review'; });
   var pendingCount = pendingReviews.length;
-  var warningHtml = pendingCount > 1 ? '<div class="ps-warning">⚠️ Existem ' + pendingCount + ' mensagens pendentes. Escolha qual responder agora.</div>' : '';
+  var warningHtml = pendingCount > 1
+    ? '<div class="ps-warning">⚠️ Existem ' + pendingCount + ' mensagens pendentes. Escolha qual responder agora.</div>'
+    : '<div class="ps-warning">Mensagem pendente. Você pode focar, regenerar ou resolver sem responder.</div>';
   var roundLabel = review.suggestionRound ? ' <span style="font-size:0.72rem;color:#666;font-weight:400;">versão ' + review.suggestionRound + '</span>' : '';
   var html = '<div class="pending-section"><div class="ps-title">💬 Sugestões para responder agora' + roundLabel + '</div>' + warningHtml;
-  if (pendingCount > 1) {
+  if (pendingCount >= 1) {
     html += '<div class="pending-list">';
     for (var pi = 0; pi < pendingReviews.length; pi++) {
       var pending = pendingReviews[pi];
       html += '<div class="pending-item ' + (pending.id === review.id ? 'active' : '') + '">' +
         '<div><strong>' + (pending.id === review.id ? 'Respondendo agora: ' : 'Pendente: ') + '</strong>' + escapeHtml(pending.customerMessage || '') + '</div>' +
+        (pending.id === review.id
+          ? '<textarea id="manual-reply-' + pending.id + '" placeholder="Escreva uma resposta manual para esta pendência..." style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.82rem;min-height:64px;resize:vertical;margin-top:6px;"></textarea>'
+          : '') +
         '<div class="pending-item-actions">' +
           '<button class="btn btn-secondary" onclick="focusPending(\'' + pending.id + '\')">Responder esta</button>' +
           '<button class="btn btn-warning" onclick="focusPending(\'' + pending.id + '\')">Focar/gerar 3</button>' +
+          '<button class="btn btn-success" onclick="strategicReply(\'' + pending.id + '\')">Sugerir resposta estratégica</button>' +
+          (pending.id === review.id && hasValidPhone
+            ? '<button class="btn btn-success" onclick="injectManualReply(\'' + pending.id + '\',\'' + contactPhoneDigits + '\')">📲 Injetar texto manual</button>'
+            : '') +
+          (pending.id === review.id
+            ? '<button class="btn btn-success" onclick="registerManualReply(\'' + pending.id + '\')">Registrar texto manual</button>'
+            : '') +
           '<button class="btn btn-danger" onclick="cancelReview(\'' + pending.id + '\')">Resolver sem responder</button>' +
         '</div>' +
       '</div>';
@@ -756,7 +782,10 @@ function renderNoPendingSection(group) {
         '<option value="price">Falar valor normal</option>' +
         '<option value="close">Pedir fechamento</option>' +
       '</select>' +
-      '<button class="btn btn-primary" onclick="continueFlow(\'' + encodeURIComponent(contactId) + '\')">Gerar 3 mensagens para continuar</button>' +
+      '<div class="flex">' +
+        '<button class="btn btn-success" onclick="suggestNextFlow(\'' + encodeURIComponent(contactId) + '\')">Sugerir próximo passo</button>' +
+        '<button class="btn btn-primary" onclick="continueFlow(\'' + encodeURIComponent(contactId) + '\')">Gerar 3 mensagens para continuar</button>' +
+      '</div>' +
     '</div>';
   }
   if (!hasAnySale && sentWithoutOutcome) {
@@ -918,8 +947,10 @@ async function copySuggestion(reviewId, suggestionId) {
   if (!review) return;
   var suggestion = review.suggestions.find(function(s) { return s.id === suggestionId; });
   if (!suggestion) return;
+  var textarea = document.getElementById('edit-' + reviewId + '-' + suggestionId);
+  var text = textarea && textarea.value.trim() ? textarea.value.trim() : suggestion.text;
   try {
-    await navigator.clipboard.writeText(suggestion.text);
+    await navigator.clipboard.writeText(text);
     var el = document.getElementById('copy-' + reviewId + '-' + suggestionId);
     if (el) { el.style.display = 'block'; setTimeout(function() { el.style.display = 'none'; }, 2000); }
   } catch (e) { alert('Erro ao copiar: ' + e.message); }
@@ -928,11 +959,46 @@ async function copySuggestion(reviewId, suggestionId) {
 async function manualSent(reviewId, suggestionId) {
   var msgEl = document.getElementById('msg-' + reviewId);
   msgEl.textContent = ''; msgEl.className = 'success-msg';
+  var textarea = document.getElementById('edit-' + reviewId + '-' + suggestionId);
+  var editedText = textarea ? textarea.value.trim() : '';
   try {
-    await api('POST', '/api/reviews/' + reviewId + '/manual-sent', { suggestionId: suggestionId });
+    await api('POST', '/api/reviews/' + reviewId + '/manual-sent', { suggestionId: suggestionId, text: editedText || undefined });
     msgEl.textContent = 'Marcado como enviado manualmente!';
     await loadReviews(); await loadStats();
   } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+}
+
+async function registerManualReply(reviewId) {
+  var textarea = document.getElementById('manual-reply-' + reviewId);
+  var text = textarea ? textarea.value.trim() : '';
+  var msgEl = document.getElementById('msg-' + reviewId);
+  if (msgEl) { msgEl.textContent = ''; msgEl.className = 'success-msg'; }
+  if (!text) { alert('Escreva a resposta manual antes.'); return; }
+  try {
+    await api('POST', '/api/reviews/' + reviewId + '/manual-text-sent', { text: text });
+    if (msgEl) msgEl.textContent = 'Resposta manual registrada!';
+    await loadReviews(); await loadStats();
+  } catch (e) {
+    if (msgEl) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+    else alert('Erro: ' + e.message);
+  }
+}
+
+async function injectManualReply(reviewId, phone) {
+  var textarea = document.getElementById('manual-reply-' + reviewId);
+  var text = textarea ? textarea.value.trim() : '';
+  if (!text) { alert('Escreva a resposta manual antes.'); return; }
+
+  const response = await fetch('http://127.0.0.1:8787/api/inject-whatsapp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone: phone, text: text, intent: 'manual_reply' })
+  });
+  const result = await response.json();
+  if (!result.ok) { alert('Erro: ' + result.error); return; }
+  try { await api('POST', '/api/reviews/' + reviewId + '/manual-text-sent', { text: text }); } catch(e) {}
+  await new Promise(r => setTimeout(r, 4000));
+  await loadReviews(); await loadStats();
 }
 
 async function updateManualStatus(reviewId) {
@@ -1003,9 +1069,11 @@ async function openWhatsApp(reviewId, suggestionId) {
   if (!review) return;
   var suggestion = review.suggestions.find(function(s) { return s.id === suggestionId; });
   if (!suggestion) return;
+  var textarea = document.getElementById('edit-' + reviewId + '-' + suggestionId);
+  var text = textarea && textarea.value.trim() ? textarea.value.trim() : suggestion.text;
   var phoneDigits = getReviewPhoneDigits(review);
   if (phoneDigits.length < 10) { alert('Telefone inválido para abrir WhatsApp.'); return; }
-  var waLink = 'https://wa.me/' + phoneDigits + '?text=' + encodeURIComponent(suggestion.text);
+  var waLink = 'https://wa.me/' + phoneDigits + '?text=' + encodeURIComponent(text);
   if (confirm('Abrir WhatsApp para ' + phoneDigits + ' com esta resposta?')) { window.open(waLink, '_blank'); }
 }
 
@@ -1092,6 +1160,23 @@ async function focusPending(reviewId) {
   }
 }
 
+async function strategicReply(reviewId) {
+  var msgEl = document.getElementById('msg-' + reviewId);
+  if (msgEl) { msgEl.textContent = ''; msgEl.className = 'success-msg'; }
+  try {
+    var result = await api('POST', '/api/reviews/' + reviewId + '/strategic-reply');
+    await loadReviews();
+    var updatedMsgEl = document.getElementById('msg-' + reviewId);
+    if (updatedMsgEl) {
+      updatedMsgEl.className = 'success-msg';
+      updatedMsgEl.textContent = 'Resposta estratégica gerada: ' + (result.stage || 'fluxo') + '. ' + (result.reason || '');
+    }
+  } catch (e) {
+    if (msgEl) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+    else { alert('Erro: ' + e.message); }
+  }
+}
+
 async function continueFlow(encodedContactId) {
   var contactId = decodeURIComponent(encodedContactId);
   var select = document.getElementById('flowStage-' + contactId);
@@ -1099,6 +1184,18 @@ async function continueFlow(encodedContactId) {
   try {
     await api('POST', '/api/contacts/' + encodedContactId + '/continue-flow', { stage: stage });
     await loadReviews();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+async function suggestNextFlow(encodedContactId) {
+  try {
+    var result = await api('POST', '/api/contacts/' + encodedContactId + '/suggest-next-flow', {});
+    await loadReviews();
+    if (result && result.stage) {
+      alert('Etapa sugerida: ' + result.stage + '\nMotivo: ' + (result.reason || 'contexto da conversa'));
+    }
   } catch (e) {
     alert('Erro: ' + e.message);
   }
@@ -1570,19 +1667,27 @@ function renderCampaign(state) {
     container.innerHTML = '<div class="empty" style="margin-top:8px;">Nenhuma campanha preparada.</div>';
     return;
   }
-  var counts = state.counts || { queued: 0, sent: 0, skipped: 0 };
+  var counts = state.counts || { queued: 0, sending: 0, sent: 0, skipped: 0, failed: 0 };
   var total = state.items.length || 0;
   var sent = counts.sent || 0;
-  var pct = total ? Math.round((sent / total) * 100) : 0;
+  var skipped = counts.skipped || 0;
+  var failed = counts.failed || 0;
+  var sending = counts.sending || 0;
+  var pct = total ? Math.round(((sent + skipped + failed) / total) * 100) : 0;
   var nextDue = state.nextDueAt ? new Date(state.nextDueAt).toLocaleTimeString() : '-';
   var preview = state.items.slice(0, 8).map(function(item) {
-    return '<div>+' + escapeHtml(item.phone) + ' · ' + escapeHtml(item.status) + '</div>';
+    var reason = item.skipReason === 'initial_already_sent' ? ' · ja recebeu abordagem inicial' : '';
+    if (item.error) reason += ' · ' + item.error;
+    return '<div>+' + escapeHtml(item.phone) + ' · ' + escapeHtml(item.status) + escapeHtml(reason) + '</div>';
   }).join('');
   container.innerHTML = '' +
     '<div class="lead-summary">' +
       '<span class="lead-chip">Status: ' + escapeHtml(campaignStatusLabel(state.status)) + '</span>' +
       '<span class="lead-chip">Enviados: ' + sent + '/' + total + '</span>' +
+      '<span class="lead-chip">Enviando: ' + sending + '</span>' +
       '<span class="lead-chip">Pendentes: ' + (counts.queued || 0) + '</span>' +
+      '<span class="lead-chip">Pulados: ' + skipped + '</span>' +
+      '<span class="lead-chip">Falhas: ' + failed + '</span>' +
       '<span class="lead-chip">Próximo: ' + escapeHtml(nextDue) + '</span>' +
     '</div>' +
     '<div class="campaign-progress"><div class="campaign-progress-bar" style="width:' + pct + '%;"></div></div>' +
@@ -1596,9 +1701,10 @@ async function prepareCampaign() {
   var limit = Number(document.getElementById('campaignLimit').value || 50);
   var minDelaySeconds = Number(document.getElementById('campaignMinDelay').value || 45);
   var maxDelaySeconds = Number(document.getElementById('campaignMaxDelay').value || 120);
+  var allowResendForTest = document.getElementById('campaignAllowResendForTest').checked === true;
   if (!message) { msgEl.className = 'error-msg'; msgEl.textContent = 'Digite a mensagem inicial.'; return; }
   try {
-    campaignState = await api('POST', '/api/campaign/prepare', { message, limit, minDelaySeconds, maxDelaySeconds });
+    campaignState = await api('POST', '/api/campaign/prepare', { message, limit, minDelaySeconds, maxDelaySeconds, allowResendForTest });
     msgEl.textContent = 'Campanha preparada. Revise e clique em Iniciar envio.';
     renderCampaign(campaignState);
   } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }

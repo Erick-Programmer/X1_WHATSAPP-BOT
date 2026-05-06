@@ -71,6 +71,16 @@ function buildUserPrompt(intent: Intent, history: string[]): string {
     ? `\nATENÇÃO: não use frases como "vale muito a pena" ou "ótimo custo-benefício". Seja empático e mostre o conteúdo.`
     : "";
 
+  const flowRules = [
+    "FLUXO DE VENDA:",
+    "- A resposta precisa fazer sentido com a mensagem mais recente e com a etapa do cliente.",
+    "- Se a pessoa so cumprimentou, responda o cumprimento e peca permissao para mostrar.",
+    "- Se a pessoa respondeu sim ou pode sim logo depois da abordagem inicial, apresente o kit sem preco e sem checkout.",
+    "- Se a pessoa ja recebeu a apresentacao e respondeu algo como ah sim, avance suavemente para valor ou pergunta de link.",
+    "- Se a pessoa perguntou preco, informe o valor e pergunte se pode mandar o link.",
+    "- Nao pule para preco ou checkout antes do cliente pedir valor ou demonstrar compra.",
+  ].join("\n");
+
   // Few-shot: exemplos aprovados pelo vendedor
   const approved = getApprovedExamples(intent);
   const fewShotBlock = approved.length > 0
@@ -82,6 +92,8 @@ function buildUserPrompt(intent: Intent, history: string[]): string {
 Intenção detectada: ${intentLabels[intent]}${extraInstruction}${fewShotBlock}
 
 Gere exatamente 3 sugestões de resposta em JSON, no formato abaixo. Retorne APENAS o JSON, sem texto antes ou depois, sem markdown.
+
+${flowRules}
 
 {
   "direct": "resposta curta e direta, 1 frase",

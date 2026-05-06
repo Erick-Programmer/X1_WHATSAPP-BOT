@@ -1,28 +1,28 @@
-/**
- * content.js — Copiloto WhatsApp Extension
+﻿/**
+ * content.js â€” Copiloto WhatsApp Extension
  *
  * Content script injetado no WhatsApp Web (https://web.whatsapp.com/*).
  *
- * ⚠️ ATENÇÃO: Este script APENAS LÊ o DOM. Ele NÃO:
+ * âš ï¸ ATENÃ‡ÃƒO: Este script APENAS LÃŠ o DOM. Ele NÃƒO:
  *   - Envia mensagens pelo WhatsApp
- *   - Clica em botões de envio
+ *   - Clica em botÃµes de envio
  *   - Preenche campos de mensagem
  *   - Modifica o DOM de qualquer forma
  *   - Acessa localStorage
  *   - Acessa internet externa
  *
- * ⚠️ Best-effort: O DOM do WhatsApp Web muda frequentemente.
- *   Os seletores abaixo funcionam na versão atual (2025),
- *   mas podem quebrar com atualizações. Teste antes de confiar.
+ * âš ï¸ Best-effort: O DOM do WhatsApp Web muda frequentemente.
+ *   Os seletores abaixo funcionam na versÃ£o atual (2025),
+ *   mas podem quebrar com atualizaÃ§Ãµes. Teste antes de confiar.
  *
  * Fluxo:
  *   1. popup.js envia mensagem {action: "capture"}
  *   2. content.js tenta ler a conversa aberta
  *   3. Retorna {contactName, contactPhone, lastMessage, receivedAt}
- *   4. Se não conseguir dados válidos, retorna {error: "..."} com debug
+ *   4. Se nÃ£o conseguir dados vÃ¡lidos, retorna {error: "..."} com debug
  *
  * Regras de captura:
- *   - Só captura mensagens RECEBIDAS (do cliente)
+ *   - SÃ³ captura mensagens RECEBIDAS (do cliente)
  *   - Ignora mensagens ENVIADAS (message-out / respostas do bot)
  *   - Exige nome OU telefone do contato
  *   - Exige pelo menos uma mensagem recebida com texto
@@ -31,7 +31,7 @@
 (function () {
   "use strict";
 
-  // ─── Listeners ─────────────────────────────────────────────
+  // â”€â”€â”€ Listeners â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request && request.action === "capture") {
@@ -47,11 +47,11 @@
     return true;
   });
 
-  // ─── Função de diagnóstico ──────────────────────────────────
+  // â”€â”€â”€ FunÃ§Ã£o de diagnÃ³stico â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
-   * Coleta amostras seguras do DOM para depuração de seletores.
-   * Não posta nada para o painel. Só retorna para o popup exibir.
+   * Coleta amostras seguras do DOM para depuraÃ§Ã£o de seletores.
+   * NÃ£o posta nada para o painel. SÃ³ retorna para o popup exibir.
    */
   function diagnosePage() {
     try {
@@ -62,7 +62,7 @@
         samples.push(`${label}: ${str}`);
       }
 
-      // Informações básicas
+      // InformaÃ§Ãµes bÃ¡sicas
       addSample("location.href", location.href);
       addSample("document.title", document.title);
 
@@ -78,7 +78,7 @@
       addSample("roleTextboxCount", document.querySelectorAll('[role="textbox"]').length);
       addSample("roleApplicationCount", document.querySelectorAll('[role="application"]').length);
 
-      // Amostras de aria-label (até 10)
+      // Amostras de aria-label (atÃ© 10)
       const ariaLabels = document.querySelectorAll("[aria-label]");
       let ariaCount = 0;
       for (const el of ariaLabels) {
@@ -90,7 +90,7 @@
         }
       }
 
-      // Amostras de data-testid (até 10)
+      // Amostras de data-testid (atÃ© 10)
       const testIds = document.querySelectorAll("[data-testid]");
       let testIdCount = 0;
       for (const el of testIds) {
@@ -102,7 +102,7 @@
         }
       }
 
-      // Amostras de texto do body (até 20 linhas não vazias)
+      // Amostras de texto do body (atÃ© 20 linhas nÃ£o vazias)
       if (document.body) {
         const lines = document.body.innerText.split("\n").filter(l => l.trim());
         let lineCount = 0;
@@ -118,45 +118,45 @@
 
       return { ok: true, samples: samples };
     } catch (err) {
-      return { ok: false, error: err.message || "Erro no diagnóstico" };
+      return { ok: false, error: err.message || "Erro no diagnÃ³stico" };
     }
   }
 
 
-  // ─── Utilitários ───────────────────────────────────────────
+  // â”€â”€â”€ UtilitÃ¡rios â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
-   * Verifica se um texto é ruído (horário, data relativa, etc.)
+   * Verifica se um texto Ã© ruÃ­do (horÃ¡rio, data relativa, etc.)
    */
   function isNoise(text) {
     if (!text || !text.trim()) return true;
     const t = text.trim();
 
-    // Apenas horário (ex: "12:34", "2:30", "00:00")
+    // Apenas horÃ¡rio (ex: "12:34", "2:30", "00:00")
     if (/^\d{1,2}:\d{2}$/.test(t)) return true;
 
     // Apenas dia da semana / data relativa
-    if (/^(Hoje|Ontem|Amanhã|Today|Yesterday)$/i.test(t)) return true;
+    if (/^(Hoje|Ontem|AmanhÃ£|Today|Yesterday)$/i.test(t)) return true;
 
-    // Apenas número de telefone
+    // Apenas nÃºmero de telefone
     if (/^[\d\s\+\-\(\)]+$/.test(t) && t.length < 20) return true;
 
     return false;
   }
 
   /**
-   * Verifica se um elemento é uma mensagem ENVIADA (message-out).
-   * Usa múltiplos indicadores para maior precisão.
+   * Verifica se um elemento Ã© uma mensagem ENVIADA (message-out).
+   * Usa mÃºltiplos indicadores para maior precisÃ£o.
    */
   function isOutgoingMessage(el) {
-    // Classe message-out (clássico do WhatsApp Web)
+    // Classe message-out (clÃ¡ssico do WhatsApp Web)
     if (el.classList.contains("message-out")) return true;
     if (el.closest(".message-out")) return true;
 
     // data-testid indicando outgoing
     if (el.querySelector('[data-testid*="outgoing"]')) return true;
 
-    // Ícones de confirmação de envio (check, double-check)
+    // Ãcones de confirmaÃ§Ã£o de envio (check, double-check)
     const hasCheck = el.querySelector(
       '[data-icon="check"], [data-icon="double-check"], ' +
       '[data-icon="msg-check"], [data-icon="msg-dblcheck"], ' +
@@ -164,7 +164,7 @@
     );
     if (hasCheck) return true;
 
-    // Verifica alinhamento: mensagens enviadas geralmente estão à direita
+    // Verifica alinhamento: mensagens enviadas geralmente estÃ£o Ã  direita
     const parent = el.closest('[role="row"], [role="listitem"]');
     if (parent) {
       const style = window.getComputedStyle(parent);
@@ -177,21 +177,21 @@
   }
 
   /**
-   * Verifica se um elemento é uma mensagem RECEBIDA (message-in).
+   * Verifica se um elemento Ã© uma mensagem RECEBIDA (message-in).
    */
   function isIncomingMessage(el) {
-    // Classe message-in (clássico do WhatsApp Web)
+    // Classe message-in (clÃ¡ssico do WhatsApp Web)
     if (el.classList.contains("message-in")) return true;
     if (el.closest(".message-in")) return true;
 
     // data-testid indicando incoming
     if (el.querySelector('[data-testid*="incoming"]')) return true;
 
-    // Se tem texto mas NÃO tem indicadores de mensagem enviada
-    // e está dentro de um contexto de conversa
+    // Se tem texto mas NÃƒO tem indicadores de mensagem enviada
+    // e estÃ¡ dentro de um contexto de conversa
     const hasText = el.querySelector("span.selectable-text, span[dir='ltr'], span[dir='auto']");
     if (hasText && !isOutgoingMessage(el)) {
-      // Verifica se está dentro do painel de conversa
+      // Verifica se estÃ¡ dentro do painel de conversa
       const inConversationPanel = el.closest(
         '[role="application"], main, div[aria-label*="mensagem"], div[aria-label*="message"]'
       );
@@ -203,7 +203,7 @@
 
   /**
    * Tenta extrair texto de um elemento de mensagem.
-   * Retorna string vazia se não encontrar texto válido.
+   * Retorna string vazia se nÃ£o encontrar texto vÃ¡lido.
    */
   function extractTextFromMessage(el) {
     if (!el) return "";
@@ -232,7 +232,7 @@
       return autoSpan.textContent.trim();
     }
 
-    // Abordagem 5: qualquer span com texto (evitando spans de horário)
+    // Abordagem 5: qualquer span com texto (evitando spans de horÃ¡rio)
     const allSpans = el.querySelectorAll("span");
     for (const span of allSpans) {
       const text = span.textContent.trim();
@@ -245,7 +245,7 @@
   }
 
   /**
-   * Tenta extrair o horário de um elemento de mensagem.
+   * Tenta extrair o horÃ¡rio de um elemento de mensagem.
    */
   function extractTimeFromMessage(el) {
     if (!el) return "";
@@ -264,7 +264,7 @@
   }
 
   /**
-   * Tenta converter texto de horário para ISO string.
+   * Tenta converter texto de horÃ¡rio para ISO string.
    */
   function parseTime(timeText) {
     if (!timeText) return "";
@@ -277,7 +277,7 @@
         }
       }
 
-      // Apenas horário (ex: "14:30")
+      // Apenas horÃ¡rio (ex: "14:30")
       const [hours, minutes] = timeText.split(":").map(Number);
       if (!isNaN(hours) && !isNaN(minutes)) {
         const now = new Date();
@@ -291,11 +291,11 @@
     return "";
   }
 
-  // ─── Função principal de captura ───────────────────────────
+  // â”€â”€â”€ FunÃ§Ã£o principal de captura â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   function captureOpenConversation() {
     try {
-      // ── DEBUG: coletar estatísticas do DOM ──────────────────
+      // â”€â”€ DEBUG: coletar estatÃ­sticas do DOM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       const debug = {
         messageInCount: 0,
         messageOutCount: 0,
@@ -303,7 +303,7 @@
         candidateTexts: [],
       };
 
-      // ── 1. Nome do contato ─────────────────────────────────
+      // â”€â”€ 1. Nome do contato â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       const header = document.querySelector("header");
       let contactName = "";
       let contactPhone = "";
@@ -355,37 +355,37 @@
         }
       }
 
-      // ── 2. Validar contato ──────────────────────────────────
+      // â”€â”€ 2. Validar contato â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       //
-      // Se não encontrou nem nome nem telefone, não adianta continuar.
-      // O painel criaria um contato fallback genérico sem utilidade.
+      // Se nÃ£o encontrou nem nome nem telefone, nÃ£o adianta continuar.
+      // O painel criaria um contato fallback genÃ©rico sem utilidade.
 
       if (!contactName && !contactPhone) {
         return {
           error:
-            "Contato não identificado. Abra uma conversa individual no WhatsApp Web e tente novamente.",
+            "Contato nÃ£o identificado. Abra uma conversa individual no WhatsApp Web e tente novamente.",
           debug: debug,
         };
       }
 
-      // ── 3. Última mensagem RECEBIDA do cliente ──────────────
+      // â”€â”€ 3. Ãšltima mensagem RECEBIDA do cliente â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       //
-      // ESTRATÉGIA:
-      //   a) .message-in (classe clássica do WhatsApp Web)
-      //   b) span.selectable-text cujo ancestor NÃO seja .message-out
+      // ESTRATÃ‰GIA:
+      //   a) .message-in (classe clÃ¡ssica do WhatsApp Web)
+      //   b) span.selectable-text cujo ancestor NÃƒO seja .message-out
       //
       // IMPORTANTE: Ignorar completamente mensagens dentro de .message-out
-      // para não capturar respostas enviadas pelo bot.
+      // para nÃ£o capturar respostas enviadas pelo bot.
 
       let lastMessage = "";
       let receivedAt = "";
 
-      // ── Estratégia A: .message-in ───────────────────────────
+      // â”€â”€ EstratÃ©gia A: .message-in â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       const messageInElements = document.querySelectorAll(".message-in");
       debug.messageInCount = messageInElements.length;
 
       if (messageInElements.length > 0) {
-        // Pega a última mensagem recebida (mais recente)
+        // Pega a Ãºltima mensagem recebida (mais recente)
         const lastIncoming = messageInElements[messageInElements.length - 1];
         const text = extractTextFromMessage(lastIncoming);
 
@@ -395,12 +395,12 @@
         }
       }
 
-      // ── Estratégia B: span.selectable-text filtrando message-out ──
+      // â”€â”€ EstratÃ©gia B: span.selectable-text filtrando message-out â”€â”€
       if (!lastMessage) {
         const selectableSpans = document.querySelectorAll("span.selectable-text");
         debug.selectableTextCount = selectableSpans.length;
 
-        // Varre de trás para frente (mais recente primeiro)
+        // Varre de trÃ¡s para frente (mais recente primeiro)
         for (let i = selectableSpans.length - 1; i >= 0; i--) {
           const span = selectableSpans[i];
           const text = span.textContent.trim();
@@ -411,20 +411,20 @@
             continue;
           }
 
-          // Ignora ruídos
+          // Ignora ruÃ­dos
           if (!text || isNoise(text)) continue;
 
-          // Verifica se está dentro do contexto de conversa
+          // Verifica se estÃ¡ dentro do contexto de conversa
           const inConversation = span.closest(
             '[role="application"], main, div[aria-label*="mensagem"], div[aria-label*="message"]'
           );
           if (!inConversation) continue;
 
-          // Se passou por todos os filtros, é uma mensagem recebida válida
+          // Se passou por todos os filtros, Ã© uma mensagem recebida vÃ¡lida
           lastMessage = text;
           debug.candidateTexts.push(`[IN] ${text.substring(0, 50)}`);
 
-          // Tenta extrair horário do elemento pai da mensagem
+          // Tenta extrair horÃ¡rio do elemento pai da mensagem
           const messageEl = span.closest(".message-in, [role='row'], [role='listitem']");
           if (messageEl) {
             receivedAt = extractTimeFromMessage(messageEl);
@@ -434,9 +434,9 @@
         }
       }
 
-      // ── 4. Validar mensagem recebida ─────────────────────────
+      // â”€â”€ 4. Validar mensagem recebida â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       //
-      // Só importa se encontrou uma mensagem RECEBIDA real do cliente.
+      // SÃ³ importa se encontrou uma mensagem RECEBIDA real do cliente.
 
       if (!lastMessage) {
         return {
@@ -447,12 +447,12 @@
         };
       }
 
-      // ── 5. Horário (fallback) ────────────────────────────────
+      // â”€â”€ 5. HorÃ¡rio (fallback) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (!receivedAt) {
         receivedAt = new Date().toISOString();
       }
 
-      // ── 6. Retorno ───────────────────────────────────────────
+      // â”€â”€ 6. Retorno â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       return {
         contactName: contactName,
         contactPhone: contactPhone,
@@ -470,18 +470,18 @@
     }
   }
 
-  // ─── Captura da lista de conversas ──────────────────────────
+  // â”€â”€â”€ Captura da lista de conversas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
-   * Tenta capturar dados da primeira conversa visível na lista lateral.
+   * Tenta capturar dados da primeira conversa visÃ­vel na lista lateral.
    *
-   * Útil quando o usuário NÃO abriu uma conversa específica,
-   * mas quer importar a conversa mais recente ou não lida.
+   * Ãštil quando o usuÃ¡rio NÃƒO abriu uma conversa especÃ­fica,
+   * mas quer importar a conversa mais recente ou nÃ£o lida.
    *
-   * ⚠️ Best-effort: lê apenas o que está visível no DOM da lista.
+   * âš ï¸ Best-effort: lÃª apenas o que estÃ¡ visÃ­vel no DOM da lista.
    *   - contactName: nome do contato na lista
-   *   - lastMessage: prévia da última mensagem (ignorando "Você:")
-   *   - contactPhone: vazio (não visível na lista)
+   *   - lastMessage: prÃ©via da Ãºltima mensagem (ignorando "VocÃª:")
+   *   - contactPhone: vazio (nÃ£o visÃ­vel na lista)
    *   - receivedAt: now ISO
    */
   function captureFromList() {
@@ -492,13 +492,13 @@
         candidateTexts: [],
       };
 
-      // ── 1. Encontrar rows de conversa na lista lateral ──────
+      // â”€â”€ 1. Encontrar rows de conversa na lista lateral â”€â”€â”€â”€â”€â”€
       //
       // O WhatsApp Web renderiza a lista de conversas como:
       //   - div[role="row"] dentro de um container
-      //   - Cada row tem nome do contato + prévia da mensagem
+      //   - Cada row tem nome do contato + prÃ©via da mensagem
       //
-      // Tentamos vários seletores para encontrar essas rows.
+      // Tentamos vÃ¡rios seletores para encontrar essas rows.
 
       const rows = document.querySelectorAll(
         'div[role="row"], ' +
@@ -514,19 +514,19 @@
         return {
           error:
             "Nenhuma conversa encontrada na lista lateral. " +
-            "Certifique-se de que o WhatsApp Web está carregado e há conversas visíveis.",
+            "Certifique-se de que o WhatsApp Web estÃ¡ carregado e hÃ¡ conversas visÃ­veis.",
           debug: debug,
         };
       }
 
-      // ── 2. Extrair dados de cada row ─────────────────────────
+      // â”€â”€ 2. Extrair dados de cada row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       //
       // Para cada row, tentamos extrair:
       //   - Nome do contato (primeiro span com texto relevante)
-      //   - Prévia da mensagem (último span com texto, ignorando "Você:")
+      //   - PrÃ©via da mensagem (Ãºltimo span com texto, ignorando "VocÃª:")
       //
-      // Priorizamos conversas que parecem ter mensagens não lidas
-      // (indicador visual de não lida).
+      // Priorizamos conversas que parecem ter mensagens nÃ£o lidas
+      // (indicador visual de nÃ£o lida).
 
       const candidates = [];
 
@@ -543,15 +543,15 @@
 
         if (texts.length === 0) continue;
 
-        // O nome geralmente é o primeiro texto relevante
+        // O nome geralmente Ã© o primeiro texto relevante
         const contactName = texts[0];
 
-        // A prévia geralmente é o último texto
+        // A prÃ©via geralmente Ã© o Ãºltimo texto
         let preview = texts[texts.length - 1];
 
-        // Ignora prévias que começam com "Você:" (mensagens enviadas por mim)
-        if (/^Você:/i.test(preview)) {
-          // Tenta o penúltimo se houver
+        // Ignora prÃ©vias que comeÃ§am com "VocÃª:" (mensagens enviadas por mim)
+        if (/^VocÃª:/i.test(preview)) {
+          // Tenta o penÃºltimo se houver
           if (texts.length >= 3) {
             preview = texts[texts.length - 2];
           } else {
@@ -559,7 +559,7 @@
           }
         }
 
-        // Ignora se a prévia for igual ao nome (sem mensagem)
+        // Ignora se a prÃ©via for igual ao nome (sem mensagem)
         if (preview === contactName) {
           preview = "";
         }
@@ -580,11 +580,11 @@
 
       debug.candidateCount = candidates.length;
 
-      // ── 3. Selecionar o melhor candidato ─────────────────────
+      // â”€â”€ 3. Selecionar o melhor candidato â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       //
       // Prioridade:
-      //   1. Primeira conversa com preview não vazia (mais recente no topo)
-      //   2. Que não seja grupo
+      //   1. Primeira conversa com preview nÃ£o vazia (mais recente no topo)
+      //   2. Que nÃ£o seja grupo
       //   3. Que tenha nome
 
       let best = null;
@@ -619,13 +619,13 @@
       if (!best) {
         return {
           error:
-            "Nenhuma conversa com dados válidos encontrada na lista. " +
+            "Nenhuma conversa com dados vÃ¡lidos encontrada na lista. " +
             "Tente clicar em uma conversa primeiro e usar 'Capturar'.",
           debug: debug,
         };
       }
 
-      // ── 4. Retorno ───────────────────────────────────────────
+      // â”€â”€ 4. Retorno â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       return {
         contactName: best.contactName,
         contactPhone: "",
@@ -643,7 +643,7 @@
     }
   }
 
-  // ─── Polling de Leads ──────────────────────────────────────
+  // â”€â”€â”€ Polling de Leads â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   let pollingInterval = null;
   let highlightedLeads = new Set();
@@ -713,14 +713,53 @@
     return true;
   });
   
-  // ─── Auto-import polling — inicia automaticamente ──────────
+  // â”€â”€â”€ Auto-import polling â€” inicia automaticamente â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   let autoImportInterval = null;
   let importedCache = new Set();
+
+  function isSystemPreview(text) {
+    if (!text) return true;
+    const value = text.trim();
+    if (!value) return true;
+    if (/^Voc/i.test(value)) return true;
+    if (/^\d{1,2}:\d{2}$/.test(value)) return true;
+    if (/^\+?\d[\d\s().-]{7,}$/.test(value)) return true;
+    if (/^(msg-|tail-|ic-|status-|media-|forward-|default-|wa-chat-|wds-ic-)/i.test(value)) return true;
+    if (/forward-refreshed|tail-out|tail-in|media-gif/i.test(value)) return true;
+    if (/voc[eê] entrou usando um link de convite/i.test(value)) return true;
+    if (/bem-vindo\(a\)|bem vindo\(a\)|bem-vindo|bem vindo/i.test(value)) return true;
+    if (/mensage(?:m|ns)\s+n[aã]o\s+lidas?/i.test(value)) return true;
+    if (/^\d{1,3}$/.test(value)) return true;
+    return false;
+  }
+
+  function isLikelyGroupName(name) {
+    if (!name) return true;
+    const value = name.trim();
+    if (value.length < 2) return true;
+    if (/^(default-|wa-chat-|wds-ic-|WhatsApp Business$|1\d{15,})/i.test(value)) return true;
+    if (/mensagem|n[aã]o lida|unread|arquivad/i.test(value)) return true;
+    if (/grupo|turma|col[eé]gio|ano[a-z]?\/|enem|professor|comunidade|leil[aã]o|off:|gr[aá]tis/i.test(value)) return true;
+    return false;
+  }
+
+  function isVisualToken(text) {
+    return /^(default-contact-refreshed|wds-ic-|wa-chat-psa|msg-|tail-|ic-|status-|media-|forward-)/i.test(text || "");
+  }
+
+  function isGroupRow(texts) {
+    return texts.some(t => /^default-group-refreshed$/i.test(t)) ||
+      texts.slice(0, 3).some(t => /grupo|turma|col[eé]gio|ano[a-z]?\/|enem|professor|comunidade|leil[aã]o|off:|gr[aá]tis/i.test(t));
+  }
 
   async function autoImportScan() {
     if (window.__copilotoInjectingText) return;
     const rows = document.querySelectorAll('div[role="row"], div[role="listitem"]');
     for (const row of rows) {
+      const rowText = row.innerText || "";
+      if (/entrou usando um link de convite/i.test(rowText)) continue;
+      if (/bem-vindo\(a\)|bem vindo\(a\)|bem-vindo|bem vindo/i.test(rowText)) continue;
+
       const spans = row.querySelectorAll("span");
       const texts = [];
       for (const span of spans) {
@@ -728,27 +767,34 @@
         if (t && t.length > 1) texts.push(t);
       }
       if (texts.length < 2) continue;
-      // Se texts[0] for badge de notificação, pegar texts[1] como nome
-      let contactName = texts[0];
+      if (isGroupRow(texts)) continue;
+
+      const hasUnreadSignal = texts.some(t => /mensage(?:m|ns)\s+n[aã]o\s+lidas?|unread/i.test(t));
+      if (!hasUnreadSignal) continue;
+
+      const cleanTexts = texts.filter(t => !isVisualToken(t));
+      const phoneText = cleanTexts.find(t => /^\+?\d[\d\s().-]{7,}$/.test(t)) || "";
+
+      // Se texts[0] for badge de notificaÃ§Ã£o, pegar texts[1] como nome
+      let contactName = cleanTexts[0] || "";
       if (/^\d+\s*mensagem/i.test(contactName)) {
-        contactName = texts[1] || "";
+        contactName = phoneText || "";
       }
-      // Ignorar nomes de sistema do WhatsApp
-      const NOME_INVALIDO = /^(default-|wa-chat-|wds-ic-|WhatsApp Business$|1\d{15,})/i;
-      if (NOME_INVALIDO.test(contactName)) continue;
-      // Ignorar textos que parecem notificações, não nomes
-      if (/mensagem|não lida|unread|arquivad/i.test(contactName)) continue;
-      // Ignorar se o "nome" for muito curto ou só números grandes
-      if (contactName.length < 2) continue;
+      if (/mensage(?:m|ns)\s+n[aã]o\s+lidas?/i.test(contactName)) {
+        contactName = phoneText || "";
+      }
+      if (isLikelyGroupName(contactName)) continue;
+      const contactPhone = phoneText ? phoneText.replace(/\D/g, "") : "";
       
-      let lastMessage = texts[texts.length - 1];
-      // Ignorar previews que são ícones de status de envio
-      if (/^(msg-dblcheck|msg-check|tail-in|tail-out|ic-|status-)/.test(lastMessage)) continue;
-      if (lastMessage.length > 200) continue;
-      // Ignorar se lastMessage parece horário ou número puro
-      if (/^\d{1,2}:\d{2}$/.test(lastMessage)) continue;
-      if (/^\d{10,}$/.test(lastMessage)) continue;
-      if (/^Você:/i.test(lastMessage)) continue; // se a última msg é sua, pula — não importa
+      let lastMessage = "";
+      for (let i = cleanTexts.length - 1; i >= 0; i--) {
+        if (!isSystemPreview(cleanTexts[i]) && cleanTexts[i] !== contactName && cleanTexts[i].length <= 200) {
+          lastMessage = cleanTexts[i];
+          break;
+        }
+      }
+      if (!lastMessage) continue;
+
       const cacheKey = `${contactName}::${lastMessage}`;
       if (importedCache.has(cacheKey)) continue;
       importedCache.add(cacheKey);
@@ -757,13 +803,13 @@
           action: "fetchProxy",
           url: "http://127.0.0.1:8787/api/inbox/import",
           method: "POST",
-          body: { contactName, contactPhone: "", lastMessage, receivedAt: new Date().toISOString() },
+          body: { contactName, contactPhone, lastMessage, receivedAt: new Date().toISOString() },
         });
-      } catch { /* extensão recarregando */ }
+      } catch { /* extensÃ£o recarregando */ }
     }
   }
 
-  // Inicia automaticamente ao carregar a página
+  // Inicia automaticamente ao carregar a pÃ¡gina
   autoImportInterval = setInterval(autoImportScan, 5000);
   autoImportScan(); // roda imediatamente
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -782,38 +828,61 @@
     return true;
   });
 
-  // ─── Injetar texto na conversa por telefone ────────────────
-  async function openConversationAndInject(phone, text) {
+  // â”€â”€â”€ Injetar texto na conversa por telefone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  function findComposeBox() {
+    const selectors = [
+      '[data-testid="conversation-compose-box-input"]',
+      '[aria-placeholder*="mensagem"][contenteditable="true"]',
+      '[aria-placeholder*="message"][contenteditable="true"]',
+      '[aria-label*="mensagem"][contenteditable="true"]',
+      '[aria-label*="message"][contenteditable="true"]',
+      'footer div[contenteditable="true"][role="textbox"]',
+      'footer div[contenteditable="true"]',
+      'div[contenteditable="true"][role="textbox"]',
+      'div[contenteditable="true"][data-tab]'
+    ];
+
+    for (const selector of selectors) {
+      const el = document.querySelector(selector);
+      if (el) return el;
+    }
+
+    return null;
+  }
+
+  async function waitForComposeBox(timeoutMs) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+      const box = findComposeBox();
+      if (box) return box;
+      await new Promise(r => setTimeout(r, 700));
+    }
+    return null;
+  }
+
+  function findSendButton() {
+    const direct = document.querySelector('[data-testid="send"], button[aria-label*="Enviar"], [aria-label*="Enviar"][role="button"], [data-icon="send"]');
+    if (!direct) return null;
+    return direct.closest('button,[role="button"]') || direct;
+  }
+
+  async function injectIntoOpenChat(text) {
     if (window.__copilotoInjectingText) return { ok: false, error: "Injecao ja em andamento." };
     window.__copilotoInjectingText = true;
-    const digits = phone.replace(/\D/g, "");
     try {
-
-    // 1. Pega o input de busca
-    const input = document.querySelector('input[type="text"][aria-label]');
-    if (!input) return { ok: false, error: "Campo de busca não encontrado." };
-
-    // 2. Limpa e digita o número
-    input.focus();
-    input.click();
-    await new Promise(r => setTimeout(r, 300));
-    input.select();
-    document.execCommand("selectAll", false, null);
-    document.execCommand("delete", false, null);
-    input.value = "";
-    await new Promise(r => setTimeout(r, 200));
-    document.execCommand("insertText", false, digits);
-    await new Promise(r => setTimeout(r, 2000));
-
-    // 3. ArrowDown + Enter para abrir a conversa
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', keyCode: 40, bubbles: true }));
-    await new Promise(r => setTimeout(r, 300));
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-    await new Promise(r => setTimeout(r, 1000));
-
-    // 4. Injeta o texto
-    const box = document.querySelector('[data-testid="conversation-compose-box-input"]');
-    if (!box) return { ok: false, error: "Campo de mensagem não encontrado." };
+    const box = await waitForComposeBox(30000);
+    if (!box) {
+      return {
+        ok: false,
+        error: "Campo de mensagem nao encontrado.",
+        debug: {
+          url: location.href,
+          title: document.title,
+          footerText: document.querySelector("footer")?.innerText || "",
+          editableCount: document.querySelectorAll('[contenteditable="true"]').length
+        }
+      };
+    }
 
     await new Promise(r => setTimeout(r, 300));
     // Limpa o campo antes de injetar
@@ -825,18 +894,10 @@
     await new Promise(r => setTimeout(r, 500));
 
     // Envia a mensagem
-    const sendBtn = document.querySelector('[data-testid="send"], [aria-label*="Enviar"], [data-icon="send"]');
+    const sendBtn = findSendButton();
     if (sendBtn) sendBtn.click();
     await new Promise(r => setTimeout(r, 500));
-
-    // Limpa o filtro de busca
-    const inputSearch = document.querySelector('input[type="text"][aria-label]');
-    if (inputSearch) {
-      inputSearch.select();
-      document.execCommand("selectAll", false, null);
-      document.execCommand("delete", false, null);
-      inputSearch.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    }
+    location.href = "https://web.whatsapp.com/";
     return { ok: true };
     } finally {
       setTimeout(() => { window.__copilotoInjectingText = false; }, 1000);
@@ -844,13 +905,14 @@
   }
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "injectText") {
-      openConversationAndInject(request.phone, request.text)
+    if (request.action === "injectIntoOpenChat" || request.action === "injectText") {
+      injectIntoOpenChat(request.text)
         .then(sendResponse);
       return true;
     }
   });
 
 })();
+
 
 

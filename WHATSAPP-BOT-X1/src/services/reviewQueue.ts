@@ -90,6 +90,14 @@ class ReviewQueue {
     return this.items.get(id);
   }
 
+  deleteReview(reviewId: string): void {
+    if (!this.items.has(reviewId)) {
+      throw new Error(`Review item ${reviewId} not found`);
+    }
+    this.items.delete(reviewId);
+    this.persist();
+  }
+
   /**
    * Update metadata fields after an imported review is created.
    * Used by local panel/import endpoints to persist contact info.
@@ -342,7 +350,7 @@ class ReviewQueue {
    * Sets chosenSuggestionId, changes status to "sent", logs manual_suggestion_sent.
    * Does NOT call whatsappClient.
    */
-  markManualSent(reviewId: string, suggestionId: string): ReviewItem {
+  markManualSent(reviewId: string, suggestionId: string, sentText?: string): ReviewItem {
     const item = this.items.get(reviewId);
     if (!item) {
       throw new Error(`Review item ${reviewId} not found`);
@@ -368,6 +376,10 @@ class ReviewQueue {
       throw new Error(`Suggestion ${suggestionId} not found in review item ${reviewId}`);
     }
 
+    if (sentText && sentText.trim()) {
+      suggestion.text = sentText.trim();
+    }
+
     item.chosenSuggestionId = suggestionId;
     item.status = "sent";
     item.updatedAt = new Date();
@@ -375,6 +387,52 @@ class ReviewQueue {
     // Log manual_suggestion_sent (no whatsappClient call)
     logManualSuggestionSent(item);
 
+    this.persist();
+
+    return item;
+  }
+
+  /**
+   * Mark a manually typed response as sent.
+   * Creates a synthetic suggestion so metrics, history and learning can use the exact sent text.
+   */
+  markManualTextSent(reviewId: string, text: string): ReviewItem {
+    const item = this.items.get(reviewId);
+    if (!item) {
+      throw new Error(`Review item ${reviewId} not found`);
+    }
+    if (item.status === "cancelled") {
+      throw new Error(`Review item ${reviewId} is cancelled`);
+    }
+    if (item.status === "expired") {
+      throw new Error(`Review item ${reviewId} is expired`);
+    }
+    if (item.status === "sent") {
+      throw new Error(`Review item ${reviewId} is already sent`);
+    }
+    if (item.status === "approved") {
+      throw new Error(`Review item ${reviewId} is already approved. Use "Enviar mock" instead.`);
+    }
+
+    const cleanText = text.trim();
+    if (!cleanText) {
+      throw new Error("Manual text is required");
+    }
+
+    const suggestion: ReplySuggestion = {
+      id: `manual_${crypto.randomUUID()}`,
+      type: "human",
+      text: cleanText,
+      validated: true,
+      createdAt: new Date(),
+    };
+
+    item.suggestions = [suggestion, ...item.suggestions];
+    item.chosenSuggestionId = suggestion.id;
+    item.status = "sent";
+    item.updatedAt = new Date();
+
+    logManualSuggestionSent(item);
     this.persist();
 
     return item;

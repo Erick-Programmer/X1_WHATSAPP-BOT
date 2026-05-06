@@ -32,6 +32,64 @@ function saveApprovedResponse(intent: string, text: string): void {
   fs.writeFileSync(APPROVED_FILE, JSON.stringify(list, null, 2), "utf-8");
 }
 
+function getConversationHistory(contactId: string, limit = 8): string[] {
+  const items = (Array.from(
+    (reviewQueue as unknown as { items: Map<string, unknown> }).items.values()
+  ) as ReviewItem[])
+    .filter((item) => item.contactId === contactId)
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+  return items
+    .flatMap((review) => {
+      const sent = review.chosenSuggestionId
+        ? review.suggestions.find((suggestion) => suggestion.id === review.chosenSuggestionId)?.text
+        : null;
+      return sent
+        ? [`Cliente: ${review.customerMessage}`, `Voce: ${sent}`]
+        : [`Cliente: ${review.customerMessage}`];
+    })
+    .slice(-limit);
+}
+
+function inferNextFlowStage(items: ReviewItem[]): { stage: string; reason: string } {
+  const sorted = items
+    .slice()
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  const last = sorted[sorted.length - 1];
+  const allText = sorted
+    .flatMap((item) => {
+      const sent = item.chosenSuggestionId
+        ? item.suggestions.find((suggestion) => suggestion.id === item.chosenSuggestionId)?.text || ""
+        : "";
+      return [item.customerMessage, sent];
+    })
+    .join(" ")
+    .toLowerCase();
+
+  if (!last) {
+    return { stage: "presentation", reason: "sem historico suficiente, melhor apresentar com leveza" };
+  }
+  if (last.intent === Intent.AskPrice || /r\$\s*27|27 reais|pre[cç]o|valor/.test(allText)) {
+    return { stage: "followup", reason: "cliente ja recebeu ou perguntou valor, agora o melhor e tirar duvida sem pressionar" };
+  }
+  if (last.intent === Intent.ObjectionExpensive) {
+    return { stage: "followup", reason: "cliente demonstrou objeção de preço, melhor recuperar com calma antes de desconto" };
+  }
+  if (last.intent === Intent.ObjectionThink || /vou dar uma analisada|vou ver|pensar|depois/.test(allText)) {
+    return { stage: "followup", reason: "cliente pediu tempo, melhor fazer follow-up leve" };
+  }
+  if (last.intent === Intent.BuyIntent || /manda.*link|quero comprar|como compra|checkout/.test(allText)) {
+    return { stage: "close", reason: "cliente demonstrou intenção de compra ou pediu proximo passo" };
+  }
+  if (/10 planners|3 ebooks|kit digital|planner estudante pro/.test(allText)) {
+    return { stage: "price", reason: "produto ja foi apresentado, proximo passo natural e falar valor com suavidade" };
+  }
+  if (last.intent === Intent.PositiveConfirmation || /pode sim|sim|quero ver|manda/.test(last.customerMessage.toLowerCase())) {
+    return { stage: "product", reason: "cliente deu permissao para ver, melhor mostrar o que vem no kit" };
+  }
+  return { stage: "presentation", reason: "cliente ainda nao recebeu apresentacao clara do produto" };
+}
+
 const PORT = parseInt(process.env.COPILOT_PANEL_PORT || "8787", 10);
 const HOST = "127.0.0.1";
 
@@ -162,6 +220,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           limit: body.limit as number | undefined,
           minDelaySeconds: body.minDelaySeconds as number | undefined,
           maxDelaySeconds: body.maxDelaySeconds as number | undefined,
+          allowResendForTest: body.allowResendForTest === true,
         });
         jsonResponse(res, 200, campaignStore.getStatus());
       } catch (e: unknown) {
@@ -213,7 +272,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     const deleteMatch = url.match(/^\/api\/reviews\/([^/]+)$/);
     if (method === "DELETE" && deleteMatch) {
       const reviewId = deleteMatch[1];
-      reviewQueue.cancelReview(reviewId);
+      reviewQueue.deleteReview(reviewId);
       jsonResponse(res, 200, { reviewId, deleted: true });
       return;
     }
@@ -251,7 +310,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       // Rejeitar duplicata: mesmo contactId + mesma mensagem já na fila
       const existingItems = Array.from(
         (reviewQueue as unknown as { items: Map<string, unknown> }).items.values()
-      ) as Array<{ contactId: string; customerMessage: string }>;
+      ) as ReviewItem[];
 
       const isDuplicate = existingItems.some(
         (i) => i.contactId === contactId && i.customerMessage === lastMessage
@@ -262,7 +321,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       }
       
       // Ignorar se o contato já tem sent recente (evita reimportar mensagem enviada pelo vendedor)
-      const hasRecentSent = (existingItems as any[]).some(
+      const hasRecentSent = existingItems.some(
         (i) => i.contactId === contactId && i.status === "sent" &&
         (Date.now() - new Date(i.updatedAt || i.createdAt || 0).getTime()) < 30000
       );
@@ -271,18 +330,32 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
 
+      const normalizeMessage = (value: string) => value.replace(/\s+/g, " ").trim().toLowerCase();
+      const incomingNormalized = normalizeMessage(lastMessage);
+      const looksLikeOwnSent = existingItems.some((i) => {
+        if (i.contactId !== contactId || i.status !== "sent" || !i.chosenSuggestionId) return false;
+        const sentText = i.suggestions.find((s) => s.id === i.chosenSuggestionId)?.text || "";
+        const sentNormalized = normalizeMessage(sentText);
+        return incomingNormalized.length > 25 && sentNormalized.length > 0 && (
+          incomingNormalized === sentNormalized ||
+          sentNormalized.startsWith(incomingNormalized) ||
+          incomingNormalized.startsWith(sentNormalized.slice(0, 80))
+        );
+      });
+      if (looksLikeOwnSent) {
+        jsonResponse(res, 200, { skipped: true, reason: "own_sent_message" });
+        return;
+      }
+
       const messageId = `msg_import_${Date.now()}`;
 
       const intentResult = classifyIntent(lastMessage);
 
       // Monta histórico das últimas 3 mensagens deste contato
-      const contactHistory = (Array.from(
-        (reviewQueue as unknown as { items: Map<string, unknown> }).items.values()
-      ) as Array<{ contactId: string; customerMessage: string; createdAt: Date }>)
-        .filter(i => i.contactId === contactId)
-        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-        .slice(-3)
-        .map(i => i.customerMessage);
+      const contactHistory = [
+        ...getConversationHistory(contactId, 8),
+        `Cliente: ${lastMessage}`,
+      ];
 
       const suggestions = await generateSuggestions(intentResult.intent, 1, contactHistory);
 
@@ -371,13 +444,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 
       const nextRound = (item.suggestionRound ?? 1) + 1;
 
-      const regenHistory = (Array.from(
-        (reviewQueue as unknown as { items: Map<string, unknown> }).items.values()
-      ) as Array<{ contactId: string; customerMessage: string; createdAt: Date }>)
-        .filter(i => i.contactId === item.contactId)
-        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-        .slice(-3)
-        .map(i => i.customerMessage);
+      const regenHistory = getConversationHistory(item.contactId, 8);
 
       const newSuggestions = await generateSuggestions(item.intent, nextRound, regenHistory);
       reviewQueue.regenerateSuggestions(reviewId, newSuggestions, nextRound);
@@ -443,13 +510,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         }
 
         const nextRound = (item.suggestionRound ?? 1) + 1;
-        const focusHistory = (Array.from(
-          (reviewQueue as unknown as { items: Map<string, unknown> }).items.values()
-        ) as Array<{ contactId: string; customerMessage: string; createdAt: Date }>)
-          .filter(i => i.contactId === item.contactId)
-          .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-          .slice(-4)
-          .map(i => i.customerMessage);
+        const focusHistory = getConversationHistory(item.contactId, 8);
 
         const newSuggestions = await generateSuggestions(item.intent, nextRound, [
           ...focusHistory,
@@ -457,6 +518,52 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         ]);
         reviewQueue.regenerateSuggestions(reviewId, newSuggestions, nextRound);
         jsonResponse(res, 200, { ok: true, reviewId });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Erro desconhecido";
+        jsonResponse(res, 400, { error: msg });
+      }
+      return;
+    }
+
+    // POST /api/reviews/:id/strategic-reply
+    const strategicReplyMatch = url.match(/^\/api\/reviews\/([^/]+)\/strategic-reply$/);
+    if (method === "POST" && strategicReplyMatch) {
+      try {
+        const reviewId = strategicReplyMatch[1];
+        const item = reviewQueue.getReviewItem(reviewId);
+        if (!item) {
+          jsonResponse(res, 404, { error: "Review not found" });
+          return;
+        }
+        if (item.status !== "pending_review") {
+          jsonResponse(res, 400, { error: `Review is ${item.status}. Must be pending_review.` });
+          return;
+        }
+
+        const contactItems = (Array.from(
+          (reviewQueue as unknown as { items: Map<string, unknown> }).items.values()
+        ) as ReviewItem[])
+          .filter((review) => review.contactId === item.contactId);
+        const decision = inferNextFlowStage(contactItems);
+        const nextRound = (item.suggestionRound ?? 1) + 1;
+        const history = [
+          ...getConversationHistory(item.contactId, 10),
+          `Mensagem atual do cliente: ${item.customerMessage}`,
+          `Intencao detectada da mensagem atual: ${item.intent}`,
+          `Etapa sugerida: ${decision.stage}`,
+          `Motivo estrategico: ${decision.reason}`,
+          "Responda especificamente a mensagem atual, mas respeitando a etapa do fluxo.",
+        ];
+
+        const newSuggestions = await generateFlowContinuationSuggestionsSmart(decision.stage, history, nextRound);
+        reviewQueue.regenerateSuggestions(reviewId, newSuggestions, nextRound);
+
+        jsonResponse(res, 200, {
+          ok: true,
+          reviewId,
+          stage: decision.stage,
+          reason: decision.reason,
+        });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Erro desconhecido";
         jsonResponse(res, 400, { error: msg });
@@ -506,6 +613,58 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         });
 
         jsonResponse(res, 201, reviewQueue.getReviewItem(item.id));
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Erro desconhecido";
+        jsonResponse(res, 400, { error: msg });
+      }
+      return;
+    }
+
+    // POST /api/contacts/:contactId/suggest-next-flow
+    const suggestFlowMatch = url.match(/^\/api\/contacts\/([^/]+)\/suggest-next-flow$/);
+    if (method === "POST" && suggestFlowMatch) {
+      try {
+        const contactId = decodeURIComponent(suggestFlowMatch[1]);
+        const contactItems = (Array.from(
+          (reviewQueue as unknown as { items: Map<string, unknown> }).items.values()
+        ) as ReviewItem[])
+          .filter((item) => item.contactId === contactId)
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+        if (contactItems.length === 0) {
+          jsonResponse(res, 404, { error: "Contato sem historico" });
+          return;
+        }
+
+        const latest = contactItems[0];
+        const decision = inferNextFlowStage(contactItems);
+        const history = getConversationHistory(contactId, 10);
+        const suggestions = await generateFlowContinuationSuggestionsSmart(decision.stage, [
+          ...history,
+          `Etapa sugerida: ${decision.stage}`,
+          `Motivo estrategico: ${decision.reason}`,
+          "Gere uma mensagem de follow-up/venda sem parecer insistente. Use contexto real da conversa.",
+        ], 1);
+
+        const item = reviewQueue.createReviewItem(
+          contactId,
+          `msg_flow_suggest_${Date.now()}`,
+          `Sugestao de proximo passo: ${decision.stage}. Motivo: ${decision.reason}`,
+          Intent.Unknown,
+          suggestions
+        );
+        reviewQueue.updateReviewMetadata(item.id, {
+          contactName: latest.contactName,
+          contactPhone: latest.contactPhone || latest.contactId,
+          source: "manual",
+          receivedAt: new Date().toISOString(),
+        });
+
+        jsonResponse(res, 201, {
+          review: reviewQueue.getReviewItem(item.id),
+          stage: decision.stage,
+          reason: decision.reason,
+        });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Erro desconhecido";
         jsonResponse(res, 400, { error: msg });
@@ -571,16 +730,57 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const reviewId = manualSentMatch[1];
       const body = await parseBody(req);
       const suggestionId = body.suggestionId as string;
+      const text = typeof body.text === "string" ? body.text.trim() : "";
       if (!suggestionId) {
         jsonResponse(res, 400, { error: "suggestionId is required" });
         return;
       }
 
       try {
-        reviewQueue.markManualSent(reviewId, suggestionId);
+        reviewQueue.markManualSent(reviewId, suggestionId, text || undefined);
         const updated = reviewQueue.getReviewItem(reviewId);
+        if (text) {
+          saveApprovedResponse(updated!.intent, text);
+        }
 
         // Cancelar todos os outros pending_review do mesmo contato
+        const allItems = Array.from(
+          (reviewQueue as unknown as { items: Map<string, unknown> }).items.values()
+        ) as Array<{ id: string; contactId: string; status: string }>;
+        for (const item of allItems) {
+          if (item.id !== reviewId && item.contactId === updated!.contactId && item.status === "pending_review") {
+            reviewQueue.cancelReview(item.id);
+          }
+        }
+
+        jsonResponse(res, 200, {
+          reviewId: updated!.id,
+          status: updated!.status,
+          chosenSuggestionId: updated!.chosenSuggestionId,
+        });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Erro desconhecido";
+        jsonResponse(res, 400, { error: msg });
+      }
+      return;
+    }
+
+    // POST /api/reviews/:id/manual-text-sent
+    const manualTextSentMatch = url.match(/^\/api\/reviews\/([^/]+)\/manual-text-sent$/);
+    if (method === "POST" && manualTextSentMatch) {
+      const reviewId = manualTextSentMatch[1];
+      const body = await parseBody(req);
+      const text = typeof body.text === "string" ? body.text.trim() : "";
+      if (!text) {
+        jsonResponse(res, 400, { error: "text is required" });
+        return;
+      }
+
+      try {
+        reviewQueue.markManualTextSent(reviewId, text);
+        const updated = reviewQueue.getReviewItem(reviewId);
+        saveApprovedResponse(updated!.intent, text);
+
         const allItems = Array.from(
           (reviewQueue as unknown as { items: Map<string, unknown> }).items.values()
         ) as Array<{ id: string; contactId: string; status: string }>;
@@ -923,9 +1123,17 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       if (status === "sending") {
         injectionQueue.markSending(taskId);
       } else if (status === "sent") {
-        injectionQueue.markSent(taskId);
+        const task = injectionQueue.markSent(taskId);
+        if (task && task.source === "initial_campaign") {
+          campaignStore.recordInitialSent(task.campaignItemId, task.phone, task.text);
+          campaignStore.markItemSent(task.campaignItemId);
+        }
       } else if (status === "failed") {
-        injectionQueue.markFailed(taskId, (body.error as string) || "Erro desconhecido");
+        const error = (body.error as string) || "Erro desconhecido";
+        const task = injectionQueue.markFailed(taskId, error);
+        if (task && task.source === "initial_campaign") {
+          campaignStore.markItemFailed(task.campaignItemId, error);
+        }
       } else {
         jsonResponse(res, 400, { error: "status invalido" });
         return;

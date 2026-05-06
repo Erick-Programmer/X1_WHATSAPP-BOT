@@ -1,9 +1,10 @@
 import * as fs from "fs";
 import * as path from "path";
 import { leadStore } from "./leadStore";
+import { initialMessageHistory } from "./initialMessageHistory";
 
 export type CampaignStatus = "idle" | "prepared" | "running" | "paused" | "completed" | "cancelled";
-export type CampaignItemStatus = "queued" | "sent" | "skipped";
+export type CampaignItemStatus = "queued" | "sending" | "sent" | "skipped" | "failed";
 
 export interface CampaignItem {
   id: string;
@@ -13,6 +14,9 @@ export interface CampaignItem {
   createdAt: string;
   sentAt?: string;
   skippedAt?: string;
+  failedAt?: string;
+  error?: string;
+  skipReason?: "initial_already_sent";
 }
 
 export interface CampaignState {
@@ -70,7 +74,7 @@ function countByStatus(items: CampaignItem[]): Record<CampaignItemStatus, number
       acc[item.status]++;
       return acc;
     },
-    { queued: 0, sent: 0, skipped: 0 } as Record<CampaignItemStatus, number>
+    { queued: 0, sending: 0, sent: 0, skipped: 0, failed: 0 } as Record<CampaignItemStatus, number>
   );
 }
 
@@ -104,6 +108,7 @@ class CampaignStore {
     limit?: number;
     minDelaySeconds?: number;
     maxDelaySeconds?: number;
+    allowResendForTest?: boolean;
   }): CampaignState {
     const message = options.message.trim();
     if (!message) throw new Error("Mensagem inicial e obrigatoria.");
@@ -126,16 +131,25 @@ class CampaignStore {
       nextDueAt: null,
       createdAt: now,
       updatedAt: now,
-      items: selected.map((lead) => ({
-        id: crypto.randomUUID(),
-        phone: lead.phone,
-        text: lead.initialMessage || message,
-        status: "queued",
-        createdAt: now,
-      })),
+      items: selected.map((lead) => {
+        const alreadySent = !options.allowResendForTest && initialMessageHistory.hasSent(lead.phone);
+        return {
+          id: crypto.randomUUID(),
+          phone: lead.phone,
+          text: lead.initialMessage || message,
+          status: alreadySent ? "skipped" : "queued",
+          createdAt: now,
+          skippedAt: alreadySent ? now : undefined,
+          skipReason: alreadySent ? "initial_already_sent" : undefined,
+        };
+      }),
     };
 
     return this.save(state);
+  }
+
+  recordInitialSent(campaignItemId: string | undefined, phone: string, text: string): void {
+    initialMessageHistory.recordSent({ phone, text, campaignItemId });
   }
 
   start(): CampaignState {
@@ -178,6 +192,12 @@ class CampaignStore {
 
     const item = state.items.find((current) => current.status === "queued");
     if (!item) {
+      const hasSending = state.items.some((current) => current.status === "sending");
+      if (hasSending) {
+        state.nextDueAt = null;
+        this.save(state);
+        return null;
+      }
       state.status = "completed";
       state.completedAt = new Date().toISOString();
       state.nextDueAt = null;
@@ -185,20 +205,51 @@ class CampaignStore {
       return null;
     }
 
-    item.status = "sent";
-    item.sentAt = new Date().toISOString();
+    item.status = "sending";
 
     const hasNext = state.items.some((current) => current.status === "queued");
     if (hasNext) {
       state.nextDueAt = new Date(Date.now() + randomDelayMs(state.minDelaySeconds, state.maxDelaySeconds)).toISOString();
     } else {
-      state.status = "completed";
-      state.completedAt = new Date().toISOString();
       state.nextDueAt = null;
     }
 
     this.save(state);
     return { phone: item.phone, text: item.text, campaignItemId: item.id };
+  }
+
+  markItemSent(campaignItemId: string | undefined): CampaignState {
+    const state = this.load();
+    if (!campaignItemId) return state;
+    const item = state.items.find((current) => current.id === campaignItemId);
+    if (!item) return state;
+    item.status = "sent";
+    item.sentAt = new Date().toISOString();
+    item.error = undefined;
+    const hasPending = state.items.some((current) => current.status === "queued" || current.status === "sending");
+    if (!hasPending && state.status === "running") {
+      state.status = "completed";
+      state.completedAt = new Date().toISOString();
+      state.nextDueAt = null;
+    }
+    return this.save(state);
+  }
+
+  markItemFailed(campaignItemId: string | undefined, error: string): CampaignState {
+    const state = this.load();
+    if (!campaignItemId) return state;
+    const item = state.items.find((current) => current.id === campaignItemId);
+    if (!item) return state;
+    item.status = "failed";
+    item.failedAt = new Date().toISOString();
+    item.error = error;
+    const hasPending = state.items.some((current) => current.status === "queued" || current.status === "sending");
+    if (!hasPending && state.status === "running") {
+      state.status = "completed";
+      state.completedAt = new Date().toISOString();
+      state.nextDueAt = null;
+    }
+    return this.save(state);
   }
 }
 
