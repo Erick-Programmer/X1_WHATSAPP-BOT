@@ -232,6 +232,7 @@ input[type="text"] { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4p
     <button class="ab-btn" data-panel="commercialPanel" onclick="toggleAdminPanel('commercialPanel')">🏪 Comercial</button>
     <button class="ab-btn" data-panel="importPanel" onclick="toggleAdminPanel('importPanel')">📥 Importar</button>
     <button class="ab-btn" data-panel="leadsPanel" onclick="toggleAdminPanel('leadsPanel')">📇 Leads</button>
+    <button class="ab-btn" data-panel="telegramPanel" onclick="toggleAdminPanel('telegramPanel')">✈️ Telegram</button>
     <button class="ab-btn" data-panel="testPanel" onclick="toggleAdminPanel('testPanel')">🧪 Testes</button>
     <button class="ab-btn" data-panel="metricsPanel" onclick="toggleAdminPanel('metricsPanel')">📊 Métricas</button>
   </div>
@@ -279,8 +280,12 @@ input[type="text"] { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4p
       <div id="leadsContent"></div>
       <div class="campaign-box">
         <div style="font-weight:700;color:#0f3460;margin-bottom:6px;">Campanha inicial controlada</div>
-        <label>Mensagem inicial</label>
-        <textarea id="campaignMessage" placeholder="Oi, tudo bem? Tenho um material digital chamado Planner Estudante Pro..."></textarea>
+        <label>Mensagem inicial 1</label>
+        <textarea id="campaignMessage1" placeholder="Oi, tudo bem? Tenho um material digital chamado Planner Estudante Pro..."></textarea>
+        <label>Mensagem inicial 2</label>
+        <textarea id="campaignMessage2" placeholder="Olá, tudo bem? Estou mostrando uma ideia simples para ajudar na organização dos estudos."></textarea>
+        <label>Mensagem inicial 3</label>
+        <textarea id="campaignMessage3" placeholder="Oi! Posso te mostrar rapidinho um material para ajudar nos estudos?"></textarea>
         <div class="campaign-row">
           <div><label>Limite</label><input type="number" id="campaignLimit" value="50" min="1" max="500"></div>
           <div><label>Delay mín. (s)</label><input type="number" id="campaignMinDelay" value="45" min="5"></div>
@@ -310,6 +315,35 @@ input[type="text"] { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4p
         <div id="injectionQueueMsg" class="success-msg"></div>
         <div id="injectionQueueContent"></div>
       </div>
+    </div>
+  </div>
+
+  <div class="admin-panel" id="telegramPanel">
+    <div class="card-inner">
+      <div style="margin-bottom:6px;font-size:0.82rem;color:#666;">
+        Telegram separado do WhatsApp. Use @username ou links t.me/usuario.
+      </div>
+      <label>Usernames / links Telegram</label>
+      <textarea id="telegramImportText" placeholder="@usuario&#10;https://t.me/usuario2"></textarea>
+      <label style="margin-top:6px;display:block;">Mensagem inicial Telegram 1</label>
+      <textarea id="telegramCampaignMessage1" placeholder="Oi, tudo bem? Posso te mostrar uma ideia rapidinho?"></textarea>
+      <label style="margin-top:6px;display:block;">Mensagem inicial Telegram 2</label>
+      <textarea id="telegramCampaignMessage2" placeholder="Olá, tudo bem? Estou mostrando uma ideia simples para organização dos estudos."></textarea>
+      <label style="margin-top:6px;display:block;">Mensagem inicial Telegram 3</label>
+      <textarea id="telegramCampaignMessage3" placeholder="Oi! Posso te mostrar rapidinho um material para ajudar nos estudos?"></textarea>
+      <div class="flex">
+        <label>Limite</label><input type="number" id="telegramCampaignLimit" value="50" min="1" max="500" style="width:70px;">
+        <label>Delay mín. (s)</label><input type="number" id="telegramMinDelay" value="45" min="0" max="3600" style="width:70px;">
+        <label>Delay máx. (s)</label><input type="number" id="telegramMaxDelay" value="120" min="0" max="3600" style="width:70px;">
+        <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" id="telegramAllowDuplicates"> Modo teste</label>
+        <button class="btn btn-primary" onclick="prepareTelegramCampaign()">Preparar envio Telegram</button>
+        <button class="btn btn-success" onclick="startTelegramQueue()">Iniciar</button>
+        <button class="btn btn-warning" onclick="pauseTelegramQueue()">Pausar</button>
+        <button class="btn btn-secondary" onclick="loadTelegramQueue()">Atualizar fila</button>
+        <button class="btn btn-warning" onclick="clearTelegramFinished()">Limpar finalizados</button>
+      </div>
+      <div id="telegramMsg" class="success-msg"></div>
+      <div id="telegramQueueContent"></div>
     </div>
   </div>
 
@@ -374,6 +408,7 @@ let showCommercialForm = false;
 let leadsState = { total: 0, leads: [] };
 let campaignState = null;
 let injectionQueueState = null;
+let telegramQueueState = null;
 let isEditing = false;
 
 function toggleAdminPanel(panelId) {
@@ -401,6 +436,7 @@ function toggleAdminPanel(panelId) {
   if (panelId === 'credsPanel') loadCredentials();
   if (panelId === 'commercialPanel') loadCommercial();
   if (panelId === 'leadsPanel') { loadLeads(); loadCampaign(); loadInjectionQueue(); }
+  if (panelId === 'telegramPanel') { loadTelegramQueue(); }
 }
 
 function setFilter(mode) {
@@ -494,7 +530,25 @@ function getReviewPhoneDigits(r) {
   return '';
 }
 
+function getReviewUsername(r) {
+  var username = r.contactUsername || '';
+  if (!username && r.contactId && String(r.contactId).indexOf('telegram:') === 0) {
+    username = String(r.contactId).replace(/^telegram:/, '');
+  }
+  return String(username || '').replace(/^@/, '').trim();
+}
+
+function getReviewChannel(r) {
+  if (r.channel) return r.channel;
+  if (r.contactId && String(r.contactId).indexOf('telegram:') === 0) return 'telegram';
+  return 'whatsapp';
+}
+
 function computeGroupKey(r) {
+  if (getReviewChannel(r) === 'telegram') {
+    var username = getReviewUsername(r);
+    if (username) return 'telegram:' + username.toLowerCase();
+  }
   var pd = getReviewPhoneDigits(r);
   if (pd) return 'phone:' + pd;
   if (r.contactName) return 'name:' + r.contactName.trim().toLowerCase();
@@ -609,13 +663,15 @@ function groupReviews(reviews) {
 
 function getGroupInfo(group) {
   var first = group[0];
+  var channel = getReviewChannel(first);
+  var username = group.map(getReviewUsername).find(Boolean) || '';
   var clientPhone = getReviewPhoneDigits(first) || group.map(getReviewPhoneDigits).find(Boolean) || '';
-  var clientName = group.map(function(r) { return r.contactName; }).find(Boolean) || clientPhone || first.contactId;
+  var clientName = group.map(function(r) { return r.contactName; }).find(Boolean) || (username ? '@' + username : '') || clientPhone || first.contactId;
   var latestManualStatus = '';
   for (var i = 0; i < group.length; i++) { if (group[i].manualStatus) latestManualStatus = group[i].manualStatus; }
   var lastReview = group[0];
   var hasPending = group.some(function(r) { return r.status === 'pending_review'; });
-  return { clientName: clientName, clientPhone: clientPhone, latestManualStatus: latestManualStatus, total: group.length, lastMessage: lastReview.customerMessage, hasPending: hasPending };
+  return { clientName: clientName, clientPhone: clientPhone, username: username, channel: channel, latestManualStatus: latestManualStatus, total: group.length, lastMessage: lastReview.customerMessage, hasPending: hasPending };
 }
 
 function getGroupBadgeClass(group) {
@@ -772,6 +828,27 @@ async function injectWhatsAppEdited(reviewId, suggestionId, phone) {
   await loadReviews();
 }
 
+async function injectTelegramEdited(reviewId, suggestionId, username) {
+  const textarea = document.getElementById('edit-' + reviewId + '-' + suggestionId);
+  const editedText = textarea ? textarea.value.trim() : '';
+  if (!editedText) { alert('Texto vazio.'); return; }
+
+  const reviews = await api('GET', '/api/reviews');
+  const review = reviews.find(r => r.id === reviewId);
+  if (!review) return;
+
+  const response = await fetch('http://127.0.0.1:8787/api/inject-telegram', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: username, text: editedText, intent: review.intent })
+  });
+  const result = await response.json();
+  if (!result.ok) { alert('Erro: ' + result.error); return; }
+  try { await api('POST', '/api/reviews/' + reviewId + '/manual-sent', { suggestionId: suggestionId, text: editedText }); } catch(e) {}
+  await new Promise(r => setTimeout(r, 4000));
+  await loadReviews();
+}
+
 function renderFilterCounts(reviews) {
   var counts = getFilterCounts(reviews || []);
   var priorityCounts = getPriorityCounts(filterMode === 'all' ? (reviews || []) : filterReviewsBySaleOnly(reviews || []));
@@ -823,7 +900,7 @@ function renderClientList(grouped) {
         (badgeClass ? '<span class="cli-badge ' + badgeClass + '">' + badgeLabel + '</span>' : '') +
         '<span class="cli-count">' + info.total + '</span>' +
       '</div>' +
-      (info.clientPhone ? '<div class="cli-phone">' + escapeHtml(info.clientPhone) + '</div>' : '') +
+      '<div class="cli-phone">' + (info.channel === 'telegram' ? 'Telegram @' + escapeHtml(info.username || '') : (info.clientPhone ? escapeHtml(info.clientPhone) : '')) + '</div>' +
       '<div><span class="priority-badge ' + priority.className + '">' + priority.label + '</span></div>' +
       '<div class="cli-time">' + (timing.lastSent ? 'Você respondeu ' + formatAge(timing.lastSentAgeMs) : 'Último cliente ' + formatAge(timing.lastClientAgeMs)) + '</div>' +
       (preview ? '<div class="cli-preview">' + preview + '</div>' : '') +
@@ -849,6 +926,8 @@ function renderPendingSection(review, group) {
   if (review.status !== 'pending_review') return '';
   var contactPhoneDigits = getReviewPhoneDigits(review);
   var hasValidPhone = contactPhoneDigits.length >= 10;
+  var username = getReviewUsername(review);
+  var isTelegram = getReviewChannel(review) === 'telegram';
   var pendingReviews = group.filter(function(r) { return r.status === 'pending_review'; });
   var pendingCount = pendingReviews.length;
   var warningHtml = pendingCount > 1
@@ -869,7 +948,10 @@ function renderPendingSection(review, group) {
           '<button class="btn btn-secondary" onclick="focusPending(\'' + pending.id + '\')">Responder esta</button>' +
           '<button class="btn btn-warning" onclick="focusPending(\'' + pending.id + '\')">Focar/gerar 3</button>' +
           '<button class="btn btn-success" onclick="strategicReply(\'' + pending.id + '\')">Sugerir resposta estratégica</button>' +
-          (pending.id === review.id && hasValidPhone
+          (pending.id === review.id && isTelegram && username
+            ? '<button class="btn btn-success" onclick="injectTelegramManualReply(\'' + pending.id + '\',\'' + username + '\')">✈️ Injetar texto Telegram</button>'
+            : '') +
+          (pending.id === review.id && !isTelegram && hasValidPhone
             ? '<button class="btn btn-success" onclick="injectManualReply(\'' + pending.id + '\',\'' + contactPhoneDigits + '\')">📲 Injetar texto manual</button>'
             : '') +
           (pending.id === review.id
@@ -901,7 +983,9 @@ function renderPendingSection(review, group) {
         '<textarea id="edit-' + review.id + '-' + s.id + '" onfocus="isEditing=true" onblur="isEditing=false" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:0.82rem;min-height:80px;resize:vertical;margin-bottom:5px;">' + escapeHtml(s.text) + '</textarea>' +
         '<div class="flex" style="margin-top:6px;">' +
           '<button class="btn btn-secondary" onclick="copySuggestion(\'' + review.id + '\',\'' + s.id + '\')">Copiar</button>';
-      if (hasValidPhone) {
+      if (isTelegram && username) {
+        html += '<button class="btn btn-success" onclick="injectTelegramEdited(\'' + review.id + '\',\'' + s.id + '\',\'' + username + '\')">✈️ Injetar no Telegram</button>';
+      } else if (hasValidPhone) {
         html += '<button class="btn btn-success" onclick="injectWhatsAppEdited(\'' + review.id + '\',\'' + s.id + '\',\'' + contactPhoneDigits + '\')">📲 Injetar no WhatsApp</button>';
         html += '<button class="btn btn-info" onclick="openWhatsApp(\'' + review.id + '\',\'' + s.id + '\')">Abrir WhatsApp com texto</button>';
       }
@@ -915,6 +999,7 @@ function renderPendingSection(review, group) {
   html += '<div class="ps-actions">' +
     '<button class="btn btn-warning" onclick="regenerate(\'' + review.id + '\')">Gerar outras 3</button>' +
     '<button class="btn btn-warning" onclick="generateRecovery(\'' + review.id + '\')">Recuperar com R$ 17</button>' +
+    '<button class="btn btn-success" onclick="generateCheckout(\'' + review.id + '\')">Gerar com link</button>' +
     '<button class="btn btn-danger" onclick="cancelReview(\'' + review.id + '\')">Cancelar</button>' +
     '<button class="btn btn-danger" onclick="deleteReview(\'' + review.id + '\')">🗑️ Excluir</button>' +
   '</div>';
@@ -1011,7 +1096,7 @@ function renderConversation(grouped, groupKey) {
       (hasBought ? ' <span class="tag tag-sale-yes">Comprou</span>' : '') +
     '</div>' +
     '<div class="ch-meta">' +
-      (info.clientPhone ? '📞 ' + escapeHtml(info.clientPhone) : '') +
+      (info.channel === 'telegram' ? 'Telegram @' + escapeHtml(info.username || '') : (info.clientPhone ? '📞 ' + escapeHtml(info.clientPhone) : '')) +
       (badgeClass ? ' <span class="tag tag-' + badgeClass + '">' + badgeLabel + '</span>' : '') +
       ' <span class="priority-badge ' + priority.className + '">' + priority.label + '</span>' +
       ' <span class="cli-count">' + info.total + ' mensagens</span>' +
@@ -1108,7 +1193,15 @@ async function addGroupMessage(groupKey, contactName, contactPhone) {
   errEl.textContent = '';
   if (!message) { errEl.textContent = 'A mensagem é obrigatória.'; return; }
   try {
-    await api('POST', '/api/inbox/import', { source: 'manual', contactName: contactName || undefined, contactPhone: contactPhone || undefined, lastMessage: message });
+    var isTelegram = groupKey.indexOf('telegram:') === 0;
+    await api('POST', '/api/inbox/import', {
+      source: 'manual',
+      channel: isTelegram ? 'telegram' : 'whatsapp',
+      contactName: contactName || undefined,
+      contactPhone: isTelegram ? undefined : (contactPhone || undefined),
+      contactUsername: isTelegram ? groupKey.replace(/^telegram:/, '') : undefined,
+      lastMessage: message
+    });
     textarea.value = '';
     await loadReviews();
     await loadStats();
@@ -1167,6 +1260,23 @@ async function injectManualReply(reviewId, phone) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ phone: phone, text: text, intent: 'manual_reply' })
+  });
+  const result = await response.json();
+  if (!result.ok) { alert('Erro: ' + result.error); return; }
+  try { await api('POST', '/api/reviews/' + reviewId + '/manual-text-sent', { text: text }); } catch(e) {}
+  await new Promise(r => setTimeout(r, 4000));
+  await loadReviews(); await loadStats();
+}
+
+async function injectTelegramManualReply(reviewId, username) {
+  var textarea = document.getElementById('manual-reply-' + reviewId);
+  var text = textarea ? textarea.value.trim() : '';
+  if (!text) { alert('Escreva a resposta manual antes.'); return; }
+
+  const response = await fetch('http://127.0.0.1:8787/api/inject-telegram', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: username, text: text, intent: 'manual_reply' })
   });
   const result = await response.json();
   if (!result.ok) { alert('Erro: ' + result.error); return; }
@@ -1288,6 +1398,29 @@ async function regenerate(reviewId) {
     if (errorEl) {
       errorEl.className = 'error-msg';
       errorEl.textContent = 'Erro: ' + e.message;
+    } else {
+      alert('Erro: ' + e.message);
+    }
+  }
+}
+
+async function generateCheckout(reviewId) {
+  var msgEl = document.getElementById('msg-' + reviewId);
+  if (msgEl) { msgEl.textContent = ''; msgEl.className = 'success-msg'; }
+
+  try {
+    await api('POST', '/api/reviews/' + reviewId + '/checkout-suggestions');
+    await loadReviews();
+
+    var updatedMsgEl = document.getElementById('msg-' + reviewId);
+    if (updatedMsgEl) {
+      updatedMsgEl.className = 'success-msg';
+      updatedMsgEl.textContent = 'Sugestões com link de pagamento geradas!';
+    }
+  } catch (e) {
+    if (msgEl) {
+      msgEl.className = 'error-msg';
+      msgEl.textContent = 'Erro: ' + e.message;
     } else {
       alert('Erro: ' + e.message);
     }
@@ -1871,14 +2004,18 @@ function renderCampaign(state) {
 async function prepareCampaign() {
   var msgEl = document.getElementById('campaignMsg');
   msgEl.textContent = ''; msgEl.className = 'success-msg';
-  var message = document.getElementById('campaignMessage').value.trim();
+  var messages = [
+    document.getElementById('campaignMessage1').value.trim(),
+    document.getElementById('campaignMessage2').value.trim(),
+    document.getElementById('campaignMessage3').value.trim()
+  ].filter(Boolean);
   var limit = Number(document.getElementById('campaignLimit').value || 50);
   var minDelaySeconds = Number(document.getElementById('campaignMinDelay').value || 45);
   var maxDelaySeconds = Number(document.getElementById('campaignMaxDelay').value || 120);
   var allowResendForTest = document.getElementById('campaignAllowResendForTest').checked === true;
-  if (!message) { msgEl.className = 'error-msg'; msgEl.textContent = 'Digite a mensagem inicial.'; return; }
+  if (messages.length === 0) { msgEl.className = 'error-msg'; msgEl.textContent = 'Digite pelo menos uma mensagem inicial.'; return; }
   try {
-    campaignState = await api('POST', '/api/campaign/prepare', { message, limit, minDelaySeconds, maxDelaySeconds, allowResendForTest });
+    campaignState = await api('POST', '/api/campaign/prepare', { messages, limit, minDelaySeconds, maxDelaySeconds, allowResendForTest });
     msgEl.textContent = 'Campanha preparada. Revise e clique em Iniciar envio.';
     renderCampaign(campaignState);
   } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
@@ -1968,10 +2105,107 @@ async function clearFinishedInjectionQueue() {
   } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
 }
 
+async function prepareTelegramCampaign() {
+  var msgEl = document.getElementById('telegramMsg');
+  if (msgEl) { msgEl.textContent = ''; msgEl.className = 'success-msg'; }
+  var rawText = document.getElementById('telegramImportText').value.trim();
+  var messages = [
+    document.getElementById('telegramCampaignMessage1').value.trim(),
+    document.getElementById('telegramCampaignMessage2').value.trim(),
+    document.getElementById('telegramCampaignMessage3').value.trim()
+  ].filter(Boolean);
+  var limit = Number(document.getElementById('telegramCampaignLimit').value || 50);
+  var minDelaySeconds = Number(document.getElementById('telegramMinDelay').value || 45);
+  var maxDelaySeconds = Number(document.getElementById('telegramMaxDelay').value || 120);
+  var allowDuplicates = document.getElementById('telegramAllowDuplicates').checked === true;
+  if (!rawText) { if (msgEl) { msgEl.className = 'error-msg'; msgEl.textContent = 'Cole @usernames ou links t.me.'; } return; }
+  if (messages.length === 0) { if (msgEl) { msgEl.className = 'error-msg'; msgEl.textContent = 'Digite pelo menos uma mensagem inicial Telegram.'; } return; }
+  try {
+    var result = await api('POST', '/api/telegram/campaign/prepare', { rawText: rawText, messages: messages, limit: limit, minDelaySeconds: minDelaySeconds, maxDelaySeconds: maxDelaySeconds, allowDuplicates: allowDuplicates });
+    if (msgEl) msgEl.textContent = 'Fila Telegram preparada: ' + result.total + ' tarefa(s). Pulados: ' + ((result.skipped || []).length) + '. Clique Iniciar para liberar.';
+    await loadTelegramQueue();
+  } catch (e) {
+    if (msgEl) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+  }
+}
+
+async function startTelegramQueue() {
+  var msgEl = document.getElementById('telegramMsg');
+  if (msgEl) { msgEl.textContent = ''; msgEl.className = 'success-msg'; }
+  try {
+    telegramQueueState = await api('POST', '/api/inject-telegram/queue/start');
+    if (msgEl) msgEl.textContent = 'Fila Telegram iniciada.';
+    renderTelegramQueue(telegramQueueState);
+  } catch (e) {
+    if (msgEl) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+  }
+}
+
+async function pauseTelegramQueue() {
+  var msgEl = document.getElementById('telegramMsg');
+  if (msgEl) { msgEl.textContent = ''; msgEl.className = 'success-msg'; }
+  try {
+    telegramQueueState = await api('POST', '/api/inject-telegram/queue/pause');
+    if (msgEl) msgEl.textContent = 'Fila Telegram pausada.';
+    renderTelegramQueue(telegramQueueState);
+  } catch (e) {
+    if (msgEl) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+  }
+}
+
+async function loadTelegramQueue() {
+  try {
+    telegramQueueState = await api('GET', '/api/inject-telegram/queue');
+    renderTelegramQueue(telegramQueueState);
+  } catch (e) {
+    var msgEl = document.getElementById('telegramMsg');
+    if (msgEl) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro ao carregar fila Telegram: ' + e.message; }
+  }
+}
+
+function renderTelegramQueue(state) {
+  var container = document.getElementById('telegramQueueContent');
+  if (!container) return;
+  if (!state || !state.counts) {
+    container.innerHTML = '<div class="empty" style="margin-top:8px;">Fila Telegram vazia.</div>';
+    return;
+  }
+  var c = state.counts;
+  var preview = (state.tasks || []).slice(0, 10).map(function(task) {
+    var due = task.dueAt ? ' · ' + new Date(task.dueAt).toLocaleTimeString() : '';
+    return '<div>@' + escapeHtml(task.username || '-') + ' · ' + escapeHtml(task.status || '-') + ' · ' + escapeHtml(task.source || '-') + due + (task.error ? ' · ' + escapeHtml(task.error) : '') + '</div>';
+  }).join('');
+  var nextDue = state.nextDueAt ? new Date(state.nextDueAt).toLocaleTimeString() : '-';
+  container.innerHTML = '' +
+    '<div class="lead-summary">' +
+      '<span class="lead-chip">Modo: ' + escapeHtml(state.mode || '-') + '</span>' +
+      '<span class="lead-chip">Fila: ' + (c.queued || 0) + '</span>' +
+      '<span class="lead-chip">Enviando: ' + ((c.claimed || 0) + (c.sending || 0)) + '</span>' +
+      '<span class="lead-chip">Enviados: ' + (c.sent || 0) + '</span>' +
+      '<span class="lead-chip">Falhas: ' + (c.failed || 0) + '</span>' +
+      '<span class="lead-chip">Total: ' + (state.total || 0) + '</span>' +
+      '<span class="lead-chip">Próximo: ' + escapeHtml(nextDue) + '</span>' +
+    '</div>' +
+    '<div class="lead-list-preview">' + (preview || '<div>Nenhuma tarefa recente.</div>') + '</div>';
+}
+
+async function clearTelegramFinished() {
+  var msgEl = document.getElementById('telegramMsg');
+  if (msgEl) { msgEl.textContent = ''; msgEl.className = 'success-msg'; }
+  try {
+    telegramQueueState = await api('POST', '/api/inject-telegram/queue/clear-finished');
+    if (msgEl) msgEl.textContent = 'Finalizados Telegram removidos da visualização.';
+    renderTelegramQueue(telegramQueueState);
+  } catch (e) {
+    if (msgEl) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+  }
+}
+
 setInterval(async function() {
   if (!isEditing) {
     var jobs = [ loadReviews(), loadStats(), loadRuntime() ];
     if (currentAdminPanel === 'leadsPanel') { jobs.push(loadCampaign()); jobs.push(loadInjectionQueue()); }
+    if (currentAdminPanel === 'telegramPanel') { jobs.push(loadTelegramQueue()); }
     await Promise.all(jobs);
   }
 }, 5000);

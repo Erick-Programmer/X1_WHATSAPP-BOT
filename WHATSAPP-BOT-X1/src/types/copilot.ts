@@ -42,7 +42,9 @@ export interface ReviewItem {
   manualNote?: string;
   contactName?: string;
   contactPhone?: string;
-  source?: "manual" | "whatsapp_web_extension" | "api" | "mock";
+  contactUsername?: string;
+  channel?: "whatsapp" | "telegram";
+  source?: "manual" | "whatsapp_web_extension" | "telegram_web_extension" | "api" | "mock";
   receivedAt?: string;
   createdAt: Date;
   updatedAt: Date;

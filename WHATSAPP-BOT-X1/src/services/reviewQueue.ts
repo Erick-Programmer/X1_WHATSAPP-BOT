@@ -104,17 +104,19 @@ class ReviewQueue {
    */
   updateReviewMetadata(
     reviewId: string,
-    metadata: Pick<ReviewItem, "contactName" | "contactPhone" | "source" | "receivedAt">
+    metadata: Partial<Pick<ReviewItem, "contactName" | "contactPhone" | "contactUsername" | "channel" | "source" | "receivedAt">>
   ): ReviewItem {
     const item = this.items.get(reviewId);
     if (!item) {
       throw new Error(`Review item ${reviewId} not found`);
     }
 
-    item.contactName = metadata.contactName;
-    item.contactPhone = metadata.contactPhone;
-    item.source = metadata.source;
-    item.receivedAt = metadata.receivedAt;
+    if ("contactName" in metadata) item.contactName = metadata.contactName;
+    if ("contactPhone" in metadata) item.contactPhone = metadata.contactPhone;
+    if ("contactUsername" in metadata) item.contactUsername = metadata.contactUsername;
+    if ("channel" in metadata) item.channel = metadata.channel;
+    if ("source" in metadata) item.source = metadata.source;
+    if ("receivedAt" in metadata) item.receivedAt = metadata.receivedAt;
     item.updatedAt = new Date();
     this.persist();
     return item;

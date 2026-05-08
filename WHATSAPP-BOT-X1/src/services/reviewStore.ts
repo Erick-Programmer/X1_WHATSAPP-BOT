@@ -47,6 +47,8 @@ function normalizeReview(raw: Record<string, unknown>): ReviewItem {
     manualNote: raw.manualNote as string | undefined,
     contactName: raw.contactName as string | undefined,
     contactPhone: raw.contactPhone as string | undefined,
+    contactUsername: raw.contactUsername as string | undefined,
+    channel: raw.channel as ReviewItem["channel"],
     source: raw.source as ReviewItem["source"],
     receivedAt: raw.receivedAt as string | undefined,
     createdAt: new Date(raw.createdAt as string),

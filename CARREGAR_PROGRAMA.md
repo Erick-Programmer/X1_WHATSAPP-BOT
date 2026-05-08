@@ -23,3 +23,10 @@ clica na extensao e liga
 pronto!
 
 cada mensagem averigua a aba do whatsapp fica alternando as vezes nao carrega.
+
+# mensagens para enviar para leads no disparo
+Passando aqui: vi seu contato em um grupo de estudos e estou mostrando uma ideia simples para ajudar estudantes a se organizarem melhor com tarefas, provas e metas. Posso te mostrar rapidinho?
+
+Te chamei porque estou mostrando um material simples para quem estuda e quer se organizar melhor com rotina, provas e metas. Posso te explicar rapidinho como funciona?
+
+Vi seu contato em um grupo de estudos e estou divulgando uma ideia prática para ajudar na organização dos estudos. Posso te mostrar em poucas mensagens?

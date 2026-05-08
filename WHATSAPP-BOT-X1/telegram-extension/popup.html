@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Copiloto Telegram</title>
+  <style>
+    body { font-family: Arial, sans-serif; width: 310px; margin: 0; padding: 14px; color: #17212b; }
+    h1 { font-size: 1rem; margin: 0 0 4px; }
+    p { margin: 0 0 10px; color: #5f6b76; font-size: 0.82rem; line-height: 1.35; }
+    button { border: 0; border-radius: 6px; padding: 9px 10px; cursor: pointer; font-weight: 700; margin: 4px 3px 4px 0; }
+    .primary { background: #229ed9; color: #fff; }
+    .secondary { background: #eef3f7; color: #17212b; }
+    .danger { background: #e74c3c; color: #fff; }
+    .status { background: #f5f7f9; border: 1px solid #dce3e8; border-radius: 6px; padding: 8px; margin-top: 8px; font-size: 0.8rem; white-space: pre-wrap; }
+    .foot { margin-top: 10px; font-size: 0.72rem; color: #6b7782; }
+  </style>
+</head>
+<body>
+  <h1>Copiloto Telegram</h1>
+  <p>Fila separada para Telegram Web. Não mexe no WhatsApp.</p>
+  <button class="primary" id="enableBtn">Ativar</button>
+  <button class="danger" id="disableBtn">Pausar</button>
+  <button class="secondary" id="captureBtn">Capturar visíveis</button>
+  <button class="secondary" id="refreshBtn">Atualizar</button>
+  <div class="status" id="statusBox">Carregando...</div>
+  <div class="foot">Abra o Telegram Web em web.telegram.org/k/ e mantenha o painel rodando em 127.0.0.1:8787.</div>
+  <script src="popup.js"></script>
+</body>
+</html>

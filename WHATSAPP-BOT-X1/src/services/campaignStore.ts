@@ -23,6 +23,7 @@ export interface CampaignState {
   id: string;
   status: CampaignStatus;
   message: string;
+  messages?: string[];
   minDelaySeconds: number;
   maxDelaySeconds: number;
   nextDueAt: string | null;
@@ -105,12 +106,14 @@ class CampaignStore {
 
   prepare(options: {
     message: string;
+    messages?: string[];
     limit?: number;
     minDelaySeconds?: number;
     maxDelaySeconds?: number;
     allowResendForTest?: boolean;
   }): CampaignState {
-    const message = options.message.trim();
+    const messages = (options.messages || [options.message]).map((msg) => msg.trim()).filter(Boolean);
+    const message = messages[0] || "";
     if (!message) throw new Error("Mensagem inicial e obrigatoria.");
 
     const leads = leadStore.list();
@@ -126,6 +129,7 @@ class CampaignStore {
       id: `campaign_${Date.now()}`,
       status: "prepared",
       message,
+      messages,
       minDelaySeconds,
       maxDelaySeconds,
       nextDueAt: null,
@@ -136,7 +140,7 @@ class CampaignStore {
         return {
           id: crypto.randomUUID(),
           phone: lead.phone,
-          text: lead.initialMessage || message,
+          text: lead.initialMessage || messages[Math.floor(Math.random() * messages.length)],
           status: alreadySent ? "skipped" : "queued",
           createdAt: now,
           skippedAt: alreadySent ? now : undefined,

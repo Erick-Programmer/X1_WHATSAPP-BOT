@@ -20,6 +20,8 @@ import { ReviewItem } from "../../types/copilot";
 import { campaignStore } from "../../services/campaignStore";
 import { Intent } from "../../types/intent";
 import { injectionQueue } from "../../services/injectionQueue";
+import { telegramInjectionQueue, normalizeTelegramUsername } from "../../services/telegramInjectionQueue";
+import { telegramIdentityMap } from "../../services/telegramIdentityMap";
 // ─── Approved Responses (few-shot) ──────────────────────────
 const APPROVED_FILE = path.resolve(process.cwd(), "data", "approved-responses.json");
 
@@ -226,8 +228,12 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     if (method === "POST" && url === "/api/campaign/prepare") {
       try {
         const body = await parseBody(req);
+        const messages = Array.isArray(body.messages)
+          ? (body.messages as unknown[]).map((msg) => String(msg || "").trim()).filter(Boolean)
+          : [String(body.message || "").trim()].filter(Boolean);
         const state = campaignStore.prepare({
-          message: (body.message as string) || "",
+          message: messages[0] || ((body.message as string) || ""),
+          messages,
           limit: body.limit as number | undefined,
           minDelaySeconds: body.minDelaySeconds as number | undefined,
           maxDelaySeconds: body.maxDelaySeconds as number | undefined,
@@ -298,8 +304,25 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       }
 
       const source = (body.source as string) || "manual";
+      const channel = body.channel === "telegram" ? "telegram" : "whatsapp";
       const rawContactName = (body.contactName as string) || "";
       const rawContactPhone = (body.contactPhone as string) || "";
+      const rawContactUsername = (body.contactUsername as string) || "";
+      let contactUsername = channel === "telegram"
+        ? normalizeTelegramUsername(rawContactUsername || rawContactName)
+        : "";
+      if (channel === "telegram" && contactUsername) {
+        const resolvedUsername = telegramIdentityMap.resolve(contactUsername);
+        if (resolvedUsername.startsWith("peer_")) {
+          if (contactUsername !== resolvedUsername) {
+            telegramIdentityMap.saveMapping(contactUsername, resolvedUsername, rawContactName || undefined);
+          }
+          contactUsername = resolvedUsername;
+        }
+        if (contactUsername.startsWith("peer_") && rawContactName) {
+          telegramIdentityMap.saveMapping(rawContactName, contactUsername, rawContactName);
+        }
+      }
       const receivedAt = (body.receivedAt as string) || new Date().toISOString();
 
       // Limpar telefone: só dígitos. Se o WhatsApp Web mostrar o número
@@ -312,7 +335,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 
       // Gerar contactId — telefone tem prioridade SEMPRE sobre nome
       let contactId: string;
-      if (looksLikePhone(contactPhone)) {
+      if (channel === "telegram" && contactUsername) {
+        contactId = `telegram:${contactUsername.toLowerCase()}`;
+      } else if (looksLikePhone(contactPhone)) {
         contactId = contactPhone;  // sempre usa telefone se disponível
       } else {
         contactId = `unknown_${Date.now()}`;  // nunca usa nome como ID
@@ -381,7 +406,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       reviewQueue.updateReviewMetadata(item.id, {
         contactName: importedLead ? undefined : rawContactName || undefined,
         contactPhone: contactPhone || importedLead?.phone || undefined,
-        source: source as "manual" | "whatsapp_web_extension" | "api" | "mock",
+        contactUsername: contactUsername || undefined,
+        channel,
+        source: source as "manual" | "whatsapp_web_extension" | "telegram_web_extension" | "api" | "mock",
         receivedAt,
       });
 
@@ -390,6 +417,8 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         contactId: item.contactId,
         contactName: item.contactName,
         contactPhone: item.contactPhone,
+        contactUsername: item.contactUsername,
+        channel: item.channel,
         messageId: item.messageId,
         customerMessage: item.customerMessage,
         intent: item.intent,
@@ -508,6 +537,64 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       }
       return;
     }
+
+    // POST /api/reviews/:id/checkout-suggestions
+    const checkoutSuggestionsMatch = url.match(/^\/api\/reviews\/([^/]+)\/checkout-suggestions$/);
+    if (method === "POST" && checkoutSuggestionsMatch) {
+      try {
+        const reviewId = checkoutSuggestionsMatch[1];
+        const item = reviewQueue.getReviewItem(reviewId);
+        if (!item) {
+          jsonResponse(res, 404, { error: "Review not found" });
+          return;
+        }
+
+        const config = commercialSettings.getEffectiveConfig();
+        if (!config.isCheckoutConfigured || !config.checkoutUrl) {
+          jsonResponse(res, 400, { error: "Checkout normal nao configurado/aprovado." });
+          return;
+        }
+
+        const nextRound = (item.suggestionRound ?? 1) + 1;
+        const history = getConversationHistory(item.contactId, 10);
+
+        const newSuggestions = await generateFlowContinuationSuggestionsSmart("close", [
+          ...history,
+          `Mensagem atual do cliente: ${item.customerMessage}`,
+          `O cliente demonstrou interesse. Temos um link de pagamento aprovado: ${config.checkoutUrl}`,
+          `Preco do produto: ${config.price}`,
+          "Gere 3 respostas completas para WhatsApp, cada uma com abordagem diferente para fechar a venda.",
+          "Cada resposta deve incluir o link de pagamento naturalmente no texto.",
+          "As respostas devem parecer humanas, calorosas e objetivas.",
+          "Nao invente desconto. Nao seja agressivo.",
+        ], nextRound);
+
+        const withCheckoutLink = newSuggestions.map((suggestion) => {
+          const hasLink = suggestion.text.includes(config.checkoutUrl);
+          return {
+            ...suggestion,
+            text: hasLink
+              ? suggestion.text
+              : `${suggestion.text}\n\nLink para comprar: ${config.checkoutUrl}`,
+          };
+        });
+
+        reviewQueue.regenerateSuggestions(reviewId, withCheckoutLink, nextRound);
+
+        const updated = reviewQueue.getReviewItem(reviewId);
+        jsonResponse(res, 200, {
+          ok: true,
+          reviewId: updated!.id,
+          suggestionRound: updated!.suggestionRound,
+          suggestions: updated!.suggestions,
+        });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Erro desconhecido";
+        jsonResponse(res, 400, { error: msg });
+      }
+      return;
+    }
+
 
     // POST /api/reviews/:id/focus
     const focusMatch = url.match(/^\/api\/reviews\/([^/]+)\/focus$/);
@@ -1163,6 +1250,117 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     if (method === "POST" && url === "/api/inject-whatsapp/queue/clear-finished") {
       injectionQueue.clearFinished();
       jsonResponse(res, 200, injectionQueue.status());
+      return;
+    }
+
+    // POST /api/inject-telegram
+    if (method === "POST" && url === "/api/inject-telegram") {
+      const body = await parseBody(req);
+      const requestedUsername = body.username as string;
+      const task = telegramInjectionQueue.enqueue({
+        username: telegramIdentityMap.resolve(requestedUsername),
+        text: body.text as string,
+        intent: body.intent as string | undefined,
+        source: "manual_reply",
+      });
+      if (task.username !== normalizeTelegramUsername(requestedUsername)) {
+        telegramIdentityMap.saveMapping(requestedUsername, task.username);
+      }
+
+      if (body.intent && body.text) {
+        saveApprovedResponse(body.intent as string, body.text as string);
+      }
+
+      jsonResponse(res, 200, { ok: true, taskId: task.id, status: task.status });
+      return;
+    }
+
+    if (method === "GET" && url === "/api/inject-telegram/pending") {
+      const task = telegramInjectionQueue.claimNext();
+      if (task) {
+        jsonResponse(res, 200, {
+          ok: true,
+          taskId: task.id,
+          username: task.username,
+          text: task.text,
+          source: task.source,
+        });
+        return;
+      }
+      jsonResponse(res, 200, { ok: false });
+      return;
+    }
+
+    const telegramStatusMatch = url.match(/^\/api\/inject-telegram\/([^/]+)\/status$/);
+    if (method === "POST" && telegramStatusMatch) {
+      const taskId = telegramStatusMatch[1];
+      const body = await parseBody(req);
+      const status = body.status as string;
+      if (status === "sending") {
+        telegramInjectionQueue.markSending(taskId);
+      } else if (status === "sent") {
+        const task = telegramInjectionQueue.markSent(taskId);
+        const peerUsername = normalizeTelegramUsername(String(body.peerUsername || body.peerId || ""));
+        if (task && peerUsername.startsWith("peer_")) {
+          telegramIdentityMap.saveMapping(task.username, peerUsername);
+        }
+      } else if (status === "failed") {
+        telegramInjectionQueue.markFailed(taskId, (body.error as string) || "Erro desconhecido");
+      } else {
+        jsonResponse(res, 400, { error: "status invalido" });
+        return;
+      }
+      jsonResponse(res, 200, { ok: true });
+      return;
+    }
+
+    if (method === "GET" && url === "/api/inject-telegram/queue") {
+      jsonResponse(res, 200, telegramInjectionQueue.status());
+      return;
+    }
+
+    if (method === "POST" && url === "/api/inject-telegram/queue/clear-finished") {
+      telegramInjectionQueue.clearFinished();
+      jsonResponse(res, 200, telegramInjectionQueue.status());
+      return;
+    }
+
+    if (method === "POST" && url === "/api/inject-telegram/queue/start") {
+      telegramInjectionQueue.start();
+      jsonResponse(res, 200, telegramInjectionQueue.status());
+      return;
+    }
+
+    if (method === "POST" && url === "/api/inject-telegram/queue/pause") {
+      telegramInjectionQueue.pause();
+      jsonResponse(res, 200, telegramInjectionQueue.status());
+      return;
+    }
+
+    if (method === "POST" && url === "/api/telegram/campaign/prepare") {
+      const body = await parseBody(req);
+      const rawText = String(body.rawText || "");
+      const messages = Array.isArray(body.messages)
+        ? (body.messages as unknown[]).map((msg) => String(msg || "").trim()).filter(Boolean)
+        : [String(body.message || "").trim()].filter(Boolean);
+      if (messages.length === 0) {
+        jsonResponse(res, 400, { error: "Mensagem inicial obrigatoria." });
+        return;
+      }
+      const usernames = rawText
+        .split(/\r?\n|,|;/)
+        .map((line) => telegramIdentityMap.resolve(normalizeTelegramUsername(line)))
+        .filter(Boolean);
+      const unique = Array.from(new Set(usernames));
+      const prepared = telegramInjectionQueue.prepareBatch({
+        usernames: unique,
+        messages,
+        limit: Number(body.limit || unique.length),
+        minDelaySeconds: Number(body.minDelaySeconds || 45),
+        maxDelaySeconds: Number(body.maxDelaySeconds || 120),
+        allowDuplicates: body.allowDuplicates === true,
+      });
+      jsonResponse(res, 200, { ok: true, total: prepared.tasks.length, tasks: prepared.tasks, skipped: prepared.skipped });
       return;
     }
     

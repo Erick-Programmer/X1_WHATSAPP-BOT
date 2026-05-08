@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Copiloto Telegram",
+  "version": "0.1.0",
+  "description": "Fila separada para envio e captura best-effort no Telegram Web.",
+  "permissions": ["tabs", "storage", "alarms"],
+  "host_permissions": [
+    "https://web.telegram.org/*",
+    "http://127.0.0.1:8787/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://web.telegram.org/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Copiloto Telegram",
+    "default_popup": "popup.html"
+  }
+}
