@@ -22,6 +22,8 @@ import { Intent } from "../../types/intent";
 import { injectionQueue } from "../../services/injectionQueue";
 import { telegramInjectionQueue, normalizeTelegramUsername } from "../../services/telegramInjectionQueue";
 import { telegramIdentityMap } from "../../services/telegramIdentityMap";
+import { initialMessageHistory } from "../../services/initialMessageHistory";
+
 // ─── Approved Responses (few-shot) ──────────────────────────
 const APPROVED_FILE = path.resolve(process.cwd(), "data", "approved-responses.json");
 
@@ -793,6 +795,42 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       return;
     }
 
+    // GET /api/waiting-reply
+    if (method === "GET" && url === "/api/waiting-reply") {
+      const history = initialMessageHistory.load();
+      const existingItems = Array.from(
+        (reviewQueue as unknown as { items: Map<string, unknown> }).items.values()
+      ) as ReviewItem[];
+      const waiting = history.filter((entry) => {
+        const phone = normalizePhone(entry.phone);
+        return !existingItems.some((i) => i.contactId === phone);
+      });
+      jsonResponse(res, 200, { total: waiting.length, waiting });
+      return;
+    }
+
+    // POST /api/waiting-reply/create-followup
+    if (method === "POST" && url === "/api/waiting-reply/create-followup") {
+      const body = await parseBody(req);
+      const phone = normalizePhone(body.phone as string || "");
+      if (!phone) { jsonResponse(res, 400, { error: "phone obrigatorio" }); return; }
+      const suggestions = await generateSuggestions(Intent.Unknown, 1, [
+        `Voce enviou anteriormente: ${body.lastMessage || "mensagem inicial"}`,
+        "Cliente nao respondeu ainda.",
+        "Gere 3 mensagens de follow-up leves e humanizadas.",
+      ]);
+      const item = reviewQueue.createReviewItem(
+        phone, `followup_${Date.now()}`,
+        "follow-up (sem resposta)",
+        Intent.Unknown,
+        suggestions
+      );
+      reviewQueue.updateReviewMetadata(item.id, { contactPhone: phone, source: "manual" });
+      jsonResponse(res, 200, { ok: true, reviewId: item.id });
+      return;
+    }
+
+
     // POST /api/reviews/:id/sale
     const saleMatch = url.match(/^\/api\/reviews\/([^/]+)\/sale$/);
     if (method === "POST" && saleMatch) {
@@ -1249,6 +1287,13 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     // POST /api/inject-whatsapp/queue/clear-finished
     if (method === "POST" && url === "/api/inject-whatsapp/queue/clear-finished") {
       injectionQueue.clearFinished();
+      jsonResponse(res, 200, injectionQueue.status());
+      return;
+    }
+
+    // POST /api/inject-whatsapp/queue/clear-stuck
+    if (method === "POST" && url === "/api/inject-whatsapp/queue/clear-stuck") {
+      injectionQueue.clearStuck(2);
       jsonResponse(res, 200, injectionQueue.status());
       return;
     }

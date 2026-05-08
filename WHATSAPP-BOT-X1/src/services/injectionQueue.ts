@@ -127,6 +127,21 @@ class InjectionQueue {
     save(tasks);
   }
 
+  clearStuck(olderThanMinutes = 2): void {
+    const tasks = load();
+    const cutoff = Date.now() - olderThanMinutes * 60 * 1000;
+    tasks.forEach((task) => {
+      if ((task.status === "sending" || task.status === "claimed") &&
+          new Date(task.updatedAt).getTime() < cutoff) {
+        task.status = "failed";
+        task.error = "Travado — resetado automaticamente";
+        task.failedAt = new Date().toISOString();
+        task.updatedAt = new Date().toISOString();
+      }
+    });
+    save(tasks);
+  }
+
   status(): { total: number; counts: Record<InjectionTaskStatus, number>; tasks: InjectionTask[] } {
     const tasks = load();
     return { total: tasks.length, counts: counts(tasks), tasks: tasks.slice(-50).reverse() };

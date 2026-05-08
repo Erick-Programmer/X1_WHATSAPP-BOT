@@ -754,58 +754,51 @@
 
   async function autoImportScan() {
     if (window.__copilotoInjectingText) return;
-    const rows = document.querySelectorAll('div[role="row"], div[role="listitem"]');
+    const rows = [...document.querySelectorAll('[data-testid="cell-frame-container"]')];
     for (const row of rows) {
-      const rowText = row.innerText || "";
-      if (/entrou usando um link de convite/i.test(rowText)) continue;
-      if (/bem-vindo\(a\)|bem vindo\(a\)|bem-vindo|bem vindo/i.test(rowText)) continue;
-
-      const spans = row.querySelectorAll("span");
-      const texts = [];
-      for (const span of spans) {
-        const t = span.textContent.trim();
-        if (t && t.length > 1) texts.push(t);
-      }
-      if (texts.length < 2) continue;
-      if (isGroupRow(texts)) continue;
-
-      const hasUnreadSignal = texts.some(t => /mensage(?:m|ns)\s+n[aã]o\s+lidas?|unread/i.test(t));
-      if (!hasUnreadSignal) continue;
-
-      const cleanTexts = texts.filter(t => !isVisualToken(t));
-      const phoneText = cleanTexts.find(t => /^\+?\d[\d\s().-]{7,}$/.test(t)) || "";
-
-      // Se texts[0] for badge de notificaÃ§Ã£o, pegar texts[1] como nome
-      let contactName = cleanTexts[0] || "";
-      if (/^\d+\s*mensagem/i.test(contactName)) {
-        contactName = phoneText || "";
-      }
-      if (/mensage(?:m|ns)\s+n[aã]o\s+lidas?/i.test(contactName)) {
-        contactName = phoneText || "";
-      }
-      if (isLikelyGroupName(contactName)) continue;
-      const contactPhone = phoneText ? phoneText.replace(/\D/g, "") : "";
-      
-      let lastMessage = "";
-      for (let i = cleanTexts.length - 1; i >= 0; i--) {
-        if (!isSystemPreview(cleanTexts[i]) && cleanTexts[i] !== contactName && cleanTexts[i].length <= 200) {
-          lastMessage = cleanTexts[i];
-          break;
-        }
-      }
-      if (!lastMessage) continue;
-
-      const cacheKey = `${contactName}::${lastMessage}`;
-      if (importedCache.has(cacheKey)) continue;
-      importedCache.add(cacheKey);
       try {
+        const title = row.querySelector('[data-testid="cell-frame-title"] span[title]')?.getAttribute('title') || '';
+        if (!title) continue;
+
+        // badge numérico — só importa se tiver não lida
+        const spans = [...row.querySelectorAll('span')].map(s => s.textContent.trim()).filter(Boolean);
+        const badge = spans.find(t => /^\d{1,4}$/.test(t) && parseInt(t) > 0 && parseInt(t) < 5000);
+        if (!badge) continue;
+
+        // filtra grupos, sistema, comunidades
+        if (isLikelyGroupName(title)) continue;
+        if (/grupo|community|comunidade|broadcast|descontos|promoç/i.test(title)) continue;
+        // filtra empresas/sistema/spam pelo título
+        if (/^(WhatsApp|TIM|Claro|Vivo|Oi |GovBR|PicPay|99Pay|Mercado|Zarp|Zubale|LATAM|Nubank|Inter |Bradesco|Itaú|Santander|C6 |BTG|XP |Caixa)/i.test(title)) continue;
+
+        // última mensagem
+        const msgEl = row.querySelector('[data-testid="last-msg-status"] span[dir="ltr"], [data-testid="last-msg-status"] span[dir="auto"]');
+        const lastMessage = msgEl?.textContent?.trim() || '';
+        if (!lastMessage) continue;
+        if (isSystemPreview(lastMessage)) continue;
+        // filtra pelo conteúdo da mensagem
+        if (/não foi possível carregar|use seu celular para acessar|esta empresa agora usa um serviço/i.test(lastMessage)) continue;
+        // filtra nomes com ~ no início da mensagem (grupos)
+        if (/^~/.test(lastMessage)) continue;
+
+        // telefone: só extrai se título for claramente um número (10+ dígitos)
+        const digits = title.replace(/\D/g, '');
+        const contactPhone = digits.length >= 10 && digits.length <= 15 && /^\+?[\d\s().-]+$/.test(title)
+          ? digits
+          : '';
+        const contactName = title;
+
+        const cacheKey = `${contactName}::${lastMessage}`;
+        if (importedCache.has(cacheKey)) continue;
+        importedCache.add(cacheKey);
+
         chrome.runtime.sendMessage({
           action: "fetchProxy",
           url: "http://127.0.0.1:8787/api/inbox/import",
           method: "POST",
           body: { contactName, contactPhone, lastMessage, receivedAt: new Date().toISOString() },
         });
-      } catch { /* extensÃ£o recarregando */ }
+      } catch { /* extensão recarregando */ }
     }
   }
 
@@ -861,53 +854,59 @@
   }
 
   function findSendButton() {
-    const direct = document.querySelector('[data-testid="send"], button[aria-label*="Enviar"], [aria-label*="Enviar"][role="button"], [data-icon="send"]');
-    if (!direct) return null;
-    return direct.closest('button,[role="button"]') || direct;
+    const selectors = [
+      'button[aria-label="Enviar"]',
+      'button[aria-label*="Enviar"]',
+      '[data-testid="send"]',
+      '[data-icon="send"]',
+      '[aria-label*="Enviar"][role="button"]',
+    ];
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (el) return el.closest('button,[role="button"]') || el;
+    }
+    return null;
   }
 
   async function injectIntoOpenChat(text) {
     if (window.__copilotoInjectingText) return { ok: false, error: "Injecao ja em andamento." };
     window.__copilotoInjectingText = true;
     try {
-    const box = await waitForComposeBox(30000);
-    if (!box) {
-      return {
-        ok: false,
-        error: "Campo de mensagem nao encontrado.",
-        debug: {
-          url: location.href,
-          title: document.title,
-          footerText: document.querySelector("footer")?.innerText || "",
-          editableCount: document.querySelectorAll('[contenteditable="true"]').length
-        }
-      };
-    }
+      const box = await waitForComposeBox(30000);
+      if (!box) {
+        return {
+          ok: false,
+          error: "Campo de mensagem nao encontrado.",
+          debug: {
+            url: location.href,
+            title: document.title,
+            footerText: document.querySelector("footer")?.innerText || "",
+            editableCount: document.querySelectorAll('[contenteditable="true"]').length
+          }
+        };
+      }
 
-    await new Promise(r => setTimeout(r, 300));
-    // Limpa o campo antes de injetar
-    box.focus();
-    document.execCommand('selectAll', false, null);
-    document.execCommand('delete', false, null);
-    await new Promise(r => setTimeout(r, 200));
-    document.execCommand('insertText', false, text);
-    await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 300));
+      box.focus();
+      document.execCommand('selectAll', false, null);
+      document.execCommand('delete', false, null);
+      await new Promise(r => setTimeout(r, 200));
+      document.execCommand('insertText', false, text);
+      await new Promise(r => setTimeout(r, 1000));
 
-    // Envia a mensagem
-    const sendBtn = findSendButton();
-    if (sendBtn) sendBtn.click();
-    await new Promise(r => setTimeout(r, 500));
-    location.href = "https://web.whatsapp.com/";
-    return { ok: true };
+      const sendBtn = findSendButton();
+      if (sendBtn) sendBtn.click();
+      await new Promise(r => setTimeout(r, 800));
+      location.href = "https://web.whatsapp.com/";
+      return { ok: true };
     } finally {
-      setTimeout(() => { window.__copilotoInjectingText = false; }, 1000);
+      setTimeout(() => { window.__copilotoInjectingText = false; }, 1500);
     }
   }
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "injectIntoOpenChat" || request.action === "injectText") {
-      injectIntoOpenChat(request.text)
-        .then(sendResponse);
+      injectIntoOpenChat(request.text).then(sendResponse);
       return true;
     }
   });

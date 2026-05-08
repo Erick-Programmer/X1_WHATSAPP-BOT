@@ -156,7 +156,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
-setInterval(async () => {
+chrome.alarms.create('inject-poll', { periodInMinutes: 0.1 });
+
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name !== 'inject-poll') return;
   if (isInjecting) return;
 
   const savedTask = await storageGet(CURRENT_TASK_KEY);
@@ -173,9 +176,12 @@ setInterval(async () => {
         taskId: data.taskId,
         phone: data.phone,
         text: data.text,
+        source: data.source,
       });
     })
-    .catch(() => {
-      isInjecting = false;
-    });
-}, 3000);
+    .catch(() => { isInjecting = false; });
+});
+
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.alarms.create('inject-poll', { periodInMinutes: 0.1 });
+});

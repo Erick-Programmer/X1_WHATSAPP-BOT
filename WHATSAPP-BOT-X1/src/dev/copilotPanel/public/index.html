@@ -235,6 +235,7 @@ input[type="text"] { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4p
     <button class="ab-btn" data-panel="telegramPanel" onclick="toggleAdminPanel('telegramPanel')">✈️ Telegram</button>
     <button class="ab-btn" data-panel="testPanel" onclick="toggleAdminPanel('testPanel')">🧪 Testes</button>
     <button class="ab-btn" data-panel="metricsPanel" onclick="toggleAdminPanel('metricsPanel')">📊 Métricas</button>
+    <button class="ab-btn" onclick="clearStuckInjectionQueue()" style="background:#f39c12;color:#fff;border-color:#f39c12;">🔧 Limpar travados</button>
   </div>
 
   <div class="admin-panel" id="statusPanel">
@@ -311,6 +312,7 @@ input[type="text"] { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4p
         <div class="flex">
           <button class="btn btn-secondary" onclick="loadInjectionQueue()">Atualizar fila</button>
           <button class="btn btn-danger" onclick="clearFinishedInjectionQueue()">Limpar finalizados</button>
+          <button class="btn btn-warning" onclick="clearStuckInjectionQueue()">Limpar travados</button>
         </div>
         <div id="injectionQueueMsg" class="success-msg"></div>
         <div id="injectionQueueContent"></div>
@@ -379,6 +381,7 @@ input[type="text"] { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4p
     <button class="fb-btn" data-priority="followup" onclick="setPriorityFilter('followup')">Follow-up hoje</button>
     <button class="fb-btn" data-priority="recovery" onclick="setPriorityFilter('recovery')">Recuperar</button>
     <button class="fb-btn" data-priority="wait" onclick="setPriorityFilter('wait')">Aguardar</button>
+    <button class="btn btn-secondary" onclick="loadWaiting()">Não Responderam ao Disparo</button>
     <button class="fb-btn" onclick="selectVisibleGroups()">Selecionar visíveis</button>
     <button class="fb-btn" onclick="clearVisibleSelection()">Limpar seleção</button>
     <button class="fb-btn" style="margin-left:auto;background:#e74c3c;color:#fff;border-color:#e74c3c;" onclick="deleteSelected()">🗑️ Deletar selecionados</button>
@@ -470,6 +473,16 @@ async function api(method, path, body) {
   var data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Erro desconhecido');
   return data;
+}
+
+async function clearStuckInjectionQueue() {
+  var msgEl = document.getElementById('injectionQueueMsg');
+  msgEl.textContent = ''; msgEl.className = 'success-msg';
+  try {
+    injectionQueueState = await api('POST', '/api/inject-whatsapp/queue/clear-stuck');
+    msgEl.textContent = 'Tarefas travadas resetadas para failed.';
+    renderInjectionQueue(injectionQueueState);
+  } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
 }
 
 async function deleteSelected() {
@@ -2010,8 +2023,8 @@ async function prepareCampaign() {
     document.getElementById('campaignMessage3').value.trim()
   ].filter(Boolean);
   var limit = Number(document.getElementById('campaignLimit').value || 50);
-  var minDelaySeconds = Number(document.getElementById('campaignMinDelay').value || 45);
-  var maxDelaySeconds = Number(document.getElementById('campaignMaxDelay').value || 120);
+  var minDelaySeconds = Number(document.getElementById('campaignMinDelay').value || 90);
+  var maxDelaySeconds = Number(document.getElementById('campaignMaxDelay').value || 240);
   var allowResendForTest = document.getElementById('campaignAllowResendForTest').checked === true;
   if (messages.length === 0) { msgEl.className = 'error-msg'; msgEl.textContent = 'Digite pelo menos uma mensagem inicial.'; return; }
   try {
@@ -2074,6 +2087,28 @@ async function loadInjectionQueue() {
   }
 }
 
+async function loadWaiting() {
+  const data = await api('GET', '/api/waiting-reply');
+  const container = document.getElementById('reviews-container');
+  if (!data.waiting.length) {
+    container.innerHTML = '<p>Nenhum contato aguardando resposta.</p>';
+    return;
+  }
+  container.innerHTML = data.waiting.map(entry => `
+    <div class="review-card">
+      <strong>${entry.phone}</strong><br>
+      <small>Enviado: ${new Date(entry.sentAt).toLocaleString()}</small><br>
+      <em>${entry.text || ''}</em><br>
+      <button class="btn btn-warning" onclick="createFollowup('${entry.phone}', '${(entry.text||'').replace(/'/g,"\\'")}')">Criar follow-up</button>
+    </div>
+  `).join('');
+}
+
+async function createFollowup(phone, lastMessage) {
+  await api('POST', '/api/waiting-reply/create-followup', { phone, lastMessage });
+  alert('Card de follow-up criado! Veja na aba principal.');
+}
+
 function renderInjectionQueue(state) {
   var container = document.getElementById('injectionQueueContent');
   if (!container) return;
@@ -2082,16 +2117,22 @@ function renderInjectionQueue(state) {
     return;
   }
   var c = state.counts;
+  var total = state.total || 0;
+  var done = (c.sent || 0) + (c.failed || 0);
+  var pct = total ? Math.round((done / total) * 100) : 0;
   var preview = (state.tasks || []).slice(0, 8).map(function(task) {
-    return '<div>+' + escapeHtml(task.phone || '-') + ' · ' + escapeHtml(task.status || '-') + ' · ' + escapeHtml(task.source || '-') + (task.error ? ' · ' + escapeHtml(task.error) : '') + '</div>';
+    var statusColor = task.status === 'sent' ? 'color:#155724' : task.status === 'failed' ? 'color:#721c24' : task.status === 'sending' ? 'color:#004085' : '';
+    var errorHtml = task.error ? ' · <span style="color:#721c24">' + escapeHtml(task.error) + '</span>' : '';
+    return '<div style="' + statusColor + '">+' + escapeHtml(task.phone || '-') + ' · ' + escapeHtml(task.status || '-') + ' · ' + escapeHtml(task.source || '-') + errorHtml + '</div>';
   }).join('');
-  container.innerHTML = '' +
+  container.innerHTML =
     '<div class="lead-summary">' +
       '<span class="lead-chip">Fila: ' + (c.queued || 0) + '</span>' +
       '<span class="lead-chip">Enviando: ' + ((c.claimed || 0) + (c.sending || 0)) + '</span>' +
-      '<span class="lead-chip">Enviados: ' + (c.sent || 0) + '</span>' +
-      '<span class="lead-chip">Falhas: ' + (c.failed || 0) + '</span>' +
+      '<span class="lead-chip" style="color:#155724;">✅ Enviados: ' + (c.sent || 0) + '</span>' +
+      '<span class="lead-chip" style="color:#721c24;">❌ Falhas: ' + (c.failed || 0) + '</span>' +
     '</div>' +
+    '<div class="campaign-progress"><div class="campaign-progress-bar" style="width:' + pct + '%;"></div></div>' +
     '<div class="lead-list-preview">' + (preview || '<div>Nenhuma tarefa recente.</div>') + '</div>';
 }
 
@@ -2115,8 +2156,8 @@ async function prepareTelegramCampaign() {
     document.getElementById('telegramCampaignMessage3').value.trim()
   ].filter(Boolean);
   var limit = Number(document.getElementById('telegramCampaignLimit').value || 50);
-  var minDelaySeconds = Number(document.getElementById('telegramMinDelay').value || 45);
-  var maxDelaySeconds = Number(document.getElementById('telegramMaxDelay').value || 120);
+  var minDelaySeconds = Number(document.getElementById('telegramMinDelay').value || 90);
+  var maxDelaySeconds = Number(document.getElementById('telegramMaxDelay').value || 240);
   var allowDuplicates = document.getElementById('telegramAllowDuplicates').checked === true;
   if (!rawText) { if (msgEl) { msgEl.className = 'error-msg'; msgEl.textContent = 'Cole @usernames ou links t.me.'; } return; }
   if (messages.length === 0) { if (msgEl) { msgEl.className = 'error-msg'; msgEl.textContent = 'Digite pelo menos uma mensagem inicial Telegram.'; } return; }
