@@ -23,6 +23,7 @@ import { injectionQueue } from "../../services/injectionQueue";
 import { telegramInjectionQueue, normalizeTelegramUsername } from "../../services/telegramInjectionQueue";
 import { telegramIdentityMap } from "../../services/telegramIdentityMap";
 import { initialMessageHistory } from "../../services/initialMessageHistory";
+import { telegramSentHistory } from "../../services/telegramSentHistory";
 
 // ─── Approved Responses (few-shot) ──────────────────────────
 const APPROVED_FILE = path.resolve(process.cwd(), "data", "approved-responses.json");
@@ -1349,6 +1350,10 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         if (task && peerUsername.startsWith("peer_")) {
           telegramIdentityMap.saveMapping(task.username, peerUsername);
         }
+        // ADICIONA ESTA LINHA:
+        if (task && task.source === "initial_campaign") {
+          telegramSentHistory.recordSent(task.username, task.text);
+        }
       } else if (status === "failed") {
         telegramInjectionQueue.markFailed(taskId, (body.error as string) || "Erro desconhecido");
       } else {
@@ -1394,7 +1399,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       }
       const usernames = rawText
         .split(/\r?\n|,|;/)
-        .map((line) => telegramIdentityMap.resolve(normalizeTelegramUsername(line)))
+        .map((line) => normalizeTelegramUsername(line))
         .filter(Boolean);
       const unique = Array.from(new Set(usernames));
       const prepared = telegramInjectionQueue.prepareBatch({
@@ -1409,6 +1414,26 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       return;
     }
     
+    // GET /api/telegram/campaign
+    if (method === "GET" && url === "/api/telegram/campaign") {
+      jsonResponse(res, 200, telegramInjectionQueue.status());
+      return;
+    }
+
+    // POST /api/telegram/campaign/cancel
+    if (method === "POST" && url === "/api/telegram/campaign/cancel") {
+      telegramInjectionQueue.cancelAll();
+      jsonResponse(res, 200, telegramInjectionQueue.status());
+      return;
+    }
+
+    // POST /api/inject-telegram/queue/clear-stuck
+    if (method === "POST" && url === "/api/inject-telegram/queue/clear-stuck") {
+      telegramInjectionQueue.clearStuck(2);
+      jsonResponse(res, 200, telegramInjectionQueue.status());
+      return;
+    }
+
     // ── Static files ──
 
     // Check if index.html exists

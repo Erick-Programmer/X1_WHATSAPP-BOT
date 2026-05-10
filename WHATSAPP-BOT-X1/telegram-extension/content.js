@@ -81,36 +81,55 @@
 
   async function openTelegramTarget(username) {
     const peerId = peerIdFromTarget(username);
-    if (peerId) {
-      const openedComposer = document.querySelector('.input-message-input[contenteditable="true"]:not(.input-field-input-fake)');
-      if (openedComposer && openedComposer.getAttribute("data-peer-id") === peerId) return peerId;
-
-      for (let attempt = 0; attempt < 20; attempt++) {
-        const composer = document.querySelector('.input-message-input[contenteditable="true"]:not(.input-field-input-fake)');
-        if (composer && composer.getAttribute("data-peer-id") === peerId) return peerId;
-
-        const row = Array.from(document.querySelectorAll(`.chatlist-chat[data-peer-id="${peerId}"], .row[data-peer-id="${peerId}"], a[data-peer-id="${peerId}"]`))
-          .find(visible);
-        if (row) {
-          await clickTelegramRow(row);
-          await sleep(700);
-          const openedComposerAfterClick = document.querySelector('.input-message-input[contenteditable="true"]:not(.input-field-input-fake)');
-          if (openedComposerAfterClick && openedComposerAfterClick.getAttribute("data-peer-id") === peerId) return peerId;
-        }
-        await sleep(500);
-      }
-      throw new Error(`Contato Telegram peer_${peerId} não está visível/aberto na lista.`);
+    
+    // tenta achar composer já aberto
+    const openedComposer = document.querySelector('.input-message-input[contenteditable="true"]:not(.input-field-input-fake)');
+    if (openedComposer) {
+      const currentPeerId = openedComposer.getAttribute("data-peer-id") || "";
+      if (peerId && currentPeerId === peerId) return peerId;
     }
 
-    const expectedHash = "#@" + String(username || "").toLowerCase();
-    location.href = `https://web.telegram.org/k/#@${encodeURIComponent(username)}`;
-    for (let attempt = 0; attempt < 20; attempt++) {
+    // usa busca para achar o contato
+    const searchInput = document.querySelector('input.input-search-input');
+    if (!searchInput) throw new Error("Campo de busca do Telegram não encontrado.");
+    
+    searchInput.focus();
+    searchInput.value = '';
+    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(300);
+    searchInput.value = username;
+    searchInput.dispatchEvent(new InputEvent('input', { bubbles: true, data: username }));
+    await sleep(2000);
+
+    // acha a row pelo peer_id ou pelo username
+    let row = null;
+    if (peerId) {
+      row = [...document.querySelectorAll(`[data-peer-id="${peerId}"]`)]
+        .find(el => el.tagName === 'A' && el.className.includes('row-clickable'));
+    }
+    if (!row) {
+      row = [...document.querySelectorAll('a.row-clickable[data-peer-id]')]
+        .find(el => {
+          const pid = el.getAttribute('data-peer-id') || '';
+          if (pid.startsWith('-')) return false;
+          // verifica se o href ou texto contém o username
+          const href = (el.getAttribute('href') || '').toLowerCase();
+          const text = (el.innerText || '').toLowerCase();
+          const target = username.toLowerCase();
+          return href.includes(target) || text.includes(target);
+        });
+    }
+    if (!row) throw new Error(`Contato @${username} não encontrado na busca.`);
+
+    await clickTelegramRow(row);
+    const foundPeerId = row.getAttribute('data-peer-id') || '';
+    
+    for (let i = 0; i < 20; i++) {
       await sleep(500);
       const composer = document.querySelector('.input-message-input[contenteditable="true"]:not(.input-field-input-fake)');
-      const openedPeerId = composer?.getAttribute("data-peer-id") || "";
-      if (location.hash.toLowerCase().includes(expectedHash) && openedPeerId && !openedPeerId.startsWith("-")) return openedPeerId;
+      if (composer) return foundPeerId || composer.getAttribute('data-peer-id') || '';
     }
-    throw new Error(`Nao confirmou peer_id para @${username}.`);
+    throw new Error(`Chat não abriu para @${username}.`);
   }
 
   async function findComposer(expectedPeerId) {
@@ -156,41 +175,20 @@
   }
 
   function findSendButton() {
-    const exact =
-      document.querySelector("button.btn-send.send") ||
-      document.querySelector("button.btn-send.animated-button-icon.send") ||
-      document.querySelector("button.btn-send");
-
-    if (exact && visible(exact)) return exact;
-
-    const candidates = Array.from(document.querySelectorAll("button, [role=\"button\"]"))
-      .filter(visible)
-      .map((el) => {
-        const label = [
-          el.getAttribute("aria-label"),
-          el.getAttribute("title"),
-          el.getAttribute("data-testid"),
-          el.className,
-          el.textContent
-        ].join(" ").toLowerCase();
-        return { el, label };
-      });
-
-    const matched = candidates.find((c) =>
-      c.el.tagName === "BUTTON" &&
-      (
-        c.label.includes("send") ||
-        c.label.includes("enviar") ||
-        c.label.includes("btn-send")
-      )
-    );
-
-    return matched ? matched.el : null;
+    return Array.from(document.querySelectorAll('button.btn-send'))
+      .find(el => !!(el.offsetWidth || el.offsetHeight)) || null;
   }
 
   async function injectTelegramMessage(text, expectedPeerId) {
     const box = await insertText(text, expectedPeerId);
-    const sendButton = findSendButton();
+
+    let sendButton = null;
+    for (let i = 0; i < 8; i++) {
+      await sleep(i === 0 ? 2000 : 800);
+      sendButton = findSendButton();
+      if (sendButton) break;
+    }
+
     if (!sendButton) throw new Error("Botão enviar do Telegram não encontrado.");
     sendButton.click();
     await sleep(1600);
@@ -393,7 +391,7 @@
       try {
         if (message.action === "injectTelegramMessage") {
           const peerId = (message.username || "").match(/^peer_(\d+)$/)?.[1] || "";
-          sendResponse(await injectTelegramMessage(message.text || "", peerId));
+          sendResponse(await injectTelegramMessage(message.text || "", peerId || ""));
           return;
         }
         if (message.action === "processTelegramTask") {

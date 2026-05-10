@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { randomUUID } from "crypto";
+import { telegramSentHistory } from "./telegramSentHistory";
 
 export type TelegramInjectionTaskStatus = "queued" | "claimed" | "sending" | "sent" | "failed";
 export type TelegramInjectionTaskSource = "manual_reply" | "initial_campaign";
@@ -137,6 +138,23 @@ class TelegramInjectionQueue {
         skipped.push({ username, reason: "ja_esta_na_fila" });
         continue;
       }
+      if (!input.allowDuplicates && telegramSentHistory.hasSent(username)) {
+        skipped.push({ username, reason: "ja_recebeu_abordagem_inicial" });
+        const item: TelegramInjectionTask = {
+          id: randomUUID(),
+          username,
+          text: messages[Math.floor(Math.random() * messages.length)],
+          source: "initial_campaign",
+          status: "sent", // marca direto como sent/skipped visualmente
+          dueAt: undefined,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          sentAt: new Date().toISOString(),
+          error: "pulado: ja recebeu abordagem inicial",
+        };
+        // não adiciona na fila, só registra no skipped
+        continue;
+      }
       offsetSeconds += randomDelaySeconds(input.minDelaySeconds, input.maxDelaySeconds);
       const text = messages[Math.floor(Math.random() * messages.length)];
       const item: TelegramInjectionTask = {
@@ -217,6 +235,30 @@ class TelegramInjectionQueue {
   clearFinished(): void {
     const state = loadState();
     state.tasks = state.tasks.filter((task) => task.status !== "sent" && task.status !== "failed");
+    saveState(state);
+  }
+
+  cancelAll(): void {
+    const state = loadState();
+    state.tasks = state.tasks.filter(
+      (task) => task.status === "sent" || task.status === "failed"
+    );
+    state.mode = "paused";
+    saveState(state);
+  }
+
+  clearStuck(olderThanMinutes: number): void {
+    const state = loadState();
+    const cutoff = Date.now() - olderThanMinutes * 60 * 1000;
+    state.tasks = state.tasks.map((task) => {
+      if (
+        (task.status === "claimed" || task.status === "sending") &&
+        new Date(task.updatedAt).getTime() < cutoff
+      ) {
+        return { ...task, status: "failed", error: "travado - resetado manualmente", updatedAt: new Date().toISOString() };
+      }
+      return task;
+    });
     saveState(state);
   }
 

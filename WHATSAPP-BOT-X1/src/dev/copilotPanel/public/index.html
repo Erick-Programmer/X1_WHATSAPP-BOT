@@ -333,19 +333,34 @@ input[type="text"] { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4p
       <textarea id="telegramCampaignMessage2" placeholder="Olá, tudo bem? Estou mostrando uma ideia simples para organização dos estudos."></textarea>
       <label style="margin-top:6px;display:block;">Mensagem inicial Telegram 3</label>
       <textarea id="telegramCampaignMessage3" placeholder="Oi! Posso te mostrar rapidinho um material para ajudar nos estudos?"></textarea>
-      <div class="flex">
+      <div class="flex" style="margin-top:6px;">
         <label>Limite</label><input type="number" id="telegramCampaignLimit" value="50" min="1" max="500" style="width:70px;">
         <label>Delay mín. (s)</label><input type="number" id="telegramMinDelay" value="45" min="0" max="3600" style="width:70px;">
         <label>Delay máx. (s)</label><input type="number" id="telegramMaxDelay" value="120" min="0" max="3600" style="width:70px;">
         <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" id="telegramAllowDuplicates"> Modo teste</label>
-        <button class="btn btn-primary" onclick="prepareTelegramCampaign()">Preparar envio Telegram</button>
-        <button class="btn btn-success" onclick="startTelegramQueue()">Iniciar</button>
-        <button class="btn btn-warning" onclick="pauseTelegramQueue()">Pausar</button>
-        <button class="btn btn-secondary" onclick="loadTelegramQueue()">Atualizar fila</button>
-        <button class="btn btn-warning" onclick="clearTelegramFinished()">Limpar finalizados</button>
       </div>
-      <div id="telegramMsg" class="success-msg"></div>
-      <div id="telegramQueueContent"></div>
+      <div class="campaign-box">
+        <div style="font-weight:700;color:#0f3460;margin-bottom:6px;">Campanha Telegram</div>
+        <div class="flex">
+          <button class="btn btn-primary" onclick="prepareTelegramCampaign()">Preparar campanha</button>
+          <button class="btn btn-success" onclick="startTelegramQueue()">Iniciar envio</button>
+          <button class="btn btn-warning" onclick="pauseTelegramQueue()">Pausar</button>
+          <button class="btn btn-danger" onclick="cancelTelegramCampaign()">Cancelar</button>
+          <button class="btn btn-danger" onclick="clearTelegramCampaign()">Limpar fila</button>
+          <button class="btn btn-secondary" onclick="loadTelegramQueue()">Atualizar</button>
+        </div>
+        <div id="telegramMsg" class="success-msg"></div>
+        <div id="telegramCampaignContent"></div>
+      </div>
+      <div class="queue-box">
+        <div style="font-weight:700;color:#0f3460;margin-bottom:6px;">Fila real de envio</div>
+        <div class="flex">
+          <button class="btn btn-secondary" onclick="loadTelegramQueue()">Atualizar fila</button>
+          <button class="btn btn-danger" onclick="clearTelegramFinished()">Limpar finalizados</button>
+          <button class="btn btn-warning" onclick="clearTelegramStuck()">Limpar travados</button>
+        </div>
+        <div id="telegramQueueContent"></div>
+      </div>
     </div>
   </div>
 
@@ -2205,29 +2220,51 @@ async function loadTelegramQueue() {
 }
 
 function renderTelegramQueue(state) {
-  var container = document.getElementById('telegramQueueContent');
-  if (!container) return;
+  var queueContainer = document.getElementById('telegramQueueContent');
+  var campaignContainer = document.getElementById('telegramCampaignContent');
   if (!state || !state.counts) {
-    container.innerHTML = '<div class="empty" style="margin-top:8px;">Fila Telegram vazia.</div>';
+    if (queueContainer) queueContainer.innerHTML = '<div class="empty" style="margin-top:8px;">Fila Telegram vazia.</div>';
+    if (campaignContainer) campaignContainer.innerHTML = '';
     return;
   }
   var c = state.counts;
-  var preview = (state.tasks || []).slice(0, 10).map(function(task) {
-    var due = task.dueAt ? ' · ' + new Date(task.dueAt).toLocaleTimeString() : '';
-    return '<div>@' + escapeHtml(task.username || '-') + ' · ' + escapeHtml(task.status || '-') + ' · ' + escapeHtml(task.source || '-') + due + (task.error ? ' · ' + escapeHtml(task.error) : '') + '</div>';
-  }).join('');
+  var total = state.total || 0;
+  var done = (c.sent || 0) + (c.failed || 0);
+  var pct = total ? Math.round((done / total) * 100) : 0;
   var nextDue = state.nextDueAt ? new Date(state.nextDueAt).toLocaleTimeString() : '-';
-  container.innerHTML = '' +
-    '<div class="lead-summary">' +
-      '<span class="lead-chip">Modo: ' + escapeHtml(state.mode || '-') + '</span>' +
-      '<span class="lead-chip">Fila: ' + (c.queued || 0) + '</span>' +
-      '<span class="lead-chip">Enviando: ' + ((c.claimed || 0) + (c.sending || 0)) + '</span>' +
-      '<span class="lead-chip">Enviados: ' + (c.sent || 0) + '</span>' +
-      '<span class="lead-chip">Falhas: ' + (c.failed || 0) + '</span>' +
-      '<span class="lead-chip">Total: ' + (state.total || 0) + '</span>' +
-      '<span class="lead-chip">Próximo: ' + escapeHtml(nextDue) + '</span>' +
-    '</div>' +
-    '<div class="lead-list-preview">' + (preview || '<div>Nenhuma tarefa recente.</div>') + '</div>';
+
+  // Campanha — status geral
+  if (campaignContainer) {
+    campaignContainer.innerHTML =
+      '<div class="lead-summary">' +
+        '<span class="lead-chip">Status: ' + escapeHtml(state.mode === 'running' ? 'Enviando' : 'Pausada') + '</span>' +
+        '<span class="lead-chip">Enviados: ' + (c.sent || 0) + '/' + total + '</span>' +
+        '<span class="lead-chip">Enviando: ' + ((c.claimed || 0) + (c.sending || 0)) + '</span>' +
+        '<span class="lead-chip">Pendentes: ' + (c.queued || 0) + '</span>' +
+        '<span class="lead-chip">Falhas: ' + (c.failed || 0) + '</span>' +
+        '<span class="lead-chip">Próximo: ' + escapeHtml(nextDue) + '</span>' +
+      '</div>' +
+      '<div class="campaign-progress"><div class="campaign-progress-bar" style="width:' + pct + '%;"></div></div>';
+  }
+
+  // Fila real — lista de tarefas
+  var preview = (state.tasks || []).slice(0, 10).map(function(task) {
+    var statusColor = task.status === 'sent' ? 'color:#155724' : task.status === 'failed' ? 'color:#721c24' : task.status === 'sending' || task.status === 'claimed' ? 'color:#004085' : '';
+    var errorHtml = task.error ? ' · <span style="color:#721c24">' + escapeHtml(task.error) + '</span>' : '';
+    var due = task.dueAt ? ' · ' + new Date(task.dueAt).toLocaleTimeString() : '';
+    return '<div style="' + statusColor + '">@' + escapeHtml(task.username || '-') + ' · ' + escapeHtml(task.status || '-') + ' · ' + escapeHtml(task.source || '-') + due + errorHtml + '</div>';
+  }).join('');
+
+  if (queueContainer) {
+    queueContainer.innerHTML =
+      '<div class="lead-summary">' +
+        '<span class="lead-chip">Fila: ' + (c.queued || 0) + '</span>' +
+        '<span class="lead-chip">Enviando: ' + ((c.claimed || 0) + (c.sending || 0)) + '</span>' +
+        '<span class="lead-chip" style="color:#155724;">✅ Enviados: ' + (c.sent || 0) + '</span>' +
+        '<span class="lead-chip" style="color:#721c24;">❌ Falhas: ' + (c.failed || 0) + '</span>' +
+      '</div>' +
+      '<div class="lead-list-preview">' + (preview || '<div>Nenhuma tarefa recente.</div>') + '</div>';
+  }
 }
 
 async function clearTelegramFinished() {
@@ -2236,6 +2273,44 @@ async function clearTelegramFinished() {
   try {
     telegramQueueState = await api('POST', '/api/inject-telegram/queue/clear-finished');
     if (msgEl) msgEl.textContent = 'Finalizados Telegram removidos da visualização.';
+    renderTelegramQueue(telegramQueueState);
+  } catch (e) {
+    if (msgEl) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+  }
+}
+
+async function cancelTelegramCampaign() {
+  var msgEl = document.getElementById('telegramMsg');
+  if (msgEl) { msgEl.textContent = ''; msgEl.className = 'success-msg'; }
+  if (!confirm('Cancelar campanha Telegram? Remove todas as tarefas pendentes.')) return;
+  try {
+    telegramQueueState = await api('POST', '/api/telegram/campaign/cancel');
+    if (msgEl) msgEl.textContent = 'Campanha Telegram cancelada.';
+    renderTelegramQueue(telegramQueueState);
+  } catch (e) {
+    if (msgEl) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+  }
+}
+
+async function clearTelegramStuck() {
+  var msgEl = document.getElementById('telegramMsg');
+  if (msgEl) { msgEl.textContent = ''; msgEl.className = 'success-msg'; }
+  try {
+    telegramQueueState = await api('POST', '/api/inject-telegram/queue/clear-stuck');
+    if (msgEl) msgEl.textContent = 'Tarefas travadas Telegram resetadas.';
+    renderTelegramQueue(telegramQueueState);
+  } catch (e) {
+    if (msgEl) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+  }
+}
+
+async function clearTelegramCampaign() {
+  var msgEl = document.getElementById('telegramMsg');
+  if (msgEl) { msgEl.textContent = ''; msgEl.className = 'success-msg'; }
+  if (!confirm('Limpar a fila da campanha Telegram?')) return;
+  try {
+    telegramQueueState = await api('POST', '/api/telegram/campaign/cancel');
+    if (msgEl) msgEl.textContent = 'Fila Telegram limpa.';
     renderTelegramQueue(telegramQueueState);
   } catch (e) {
     if (msgEl) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }

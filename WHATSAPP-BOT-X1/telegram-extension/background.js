@@ -82,19 +82,12 @@ async function processNextTask() {
     await updateTask(pending.taskId, "sending");
 
     const tab = await getTelegramTab();
-    const targetUrl = `${TELEGRAM_URL}#${telegramTargetHash(pending.username)}`;
-    await chrome.tabs.update(tab.id, { url: targetUrl, active: true });
+    await chrome.tabs.update(tab.id, { url: 'https://web.telegram.org/k/', active: true });
     await waitForTelegramTab(tab.id);
-    await sleep(2000);
-
-    await sendToContent(tab.id, {
-      action: "clickTelegramRow",
-      username: pending.username
-    });
-    await sleep(3000);
+    await sleep(5000);
 
     const result = await sendToContent(tab.id, {
-      action: "injectTelegramMessage",
+      action: "processTelegramTask",
       username: pending.username,
       text: pending.text
     });
