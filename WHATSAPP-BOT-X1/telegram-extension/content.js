@@ -238,8 +238,13 @@
   function looksLikeNoise(text) {
     const value = String(text || "").trim();
     if (!value) return true;
+    if (value.length < 3) return true;
     if (/^\d{1,2}:\d{2}$/.test(value)) return true;
     if (/^(online|typing|visto|seen|hoje|ontem|today|yesterday)$/i.test(value)) return true;
+    if (/^last seen/i.test(value)) return true;
+    if (/^draft:/i.test(value)) return true;
+    if (/^(forwarded|encaminhado)/i.test(value)) return true;
+    if (/^(photo|video|audio|document|sticker|gif|voice|foto|vídeo|áudio|documento)/i.test(value)) return true;
     if (/^(@)?[a-zA-Z0-9_]{5,}$/.test(value) && value.length < 12) return true;
     return false;
   }
@@ -252,9 +257,13 @@
       /c[oó]digo de login/.test(haystack) ||
       /login code/.test(haystack) ||
       /n[aã]o envie esse c[oó]digo/.test(haystack) ||
-      /do not give this code/.test(haystack)
+      /do not give this code/.test(haystack) ||
+      /last seen/i.test(message) ||
+      /^unknown$/i.test(message) ||
+      /^draft:/i.test(message) ||
+      /^\d{1,2}:\d{2}$/.test(message)
     );
-  }
+}
 
   function getUsernameFromRow(row) {
     const links = Array.from(row.querySelectorAll("a[href], [href]"));

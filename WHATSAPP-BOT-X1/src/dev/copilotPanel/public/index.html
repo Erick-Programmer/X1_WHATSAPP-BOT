@@ -327,6 +327,13 @@ input[type="text"] { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4p
       </div>
       <label>Usernames / links Telegram</label>
       <textarea id="telegramImportText" placeholder="@usuario&#10;https://t.me/usuario2"></textarea>
+      <div class="flex">
+        <button class="btn btn-primary" onclick="importTelegramLeads()">Importar leads</button>
+        <button class="btn btn-secondary" onclick="loadTelegramLeads()">Atualizar lista</button>
+        <button class="btn btn-danger" onclick="clearTelegramLeads()">Limpar leads</button>
+      </div>
+      <div id="telegramLeadMsg" class="success-msg"></div>
+      <div id="telegramLeadsContent"></div>
       <label style="margin-top:6px;display:block;">Mensagem inicial Telegram 1</label>
       <textarea id="telegramCampaignMessage1" placeholder="Oi, tudo bem? Posso te mostrar uma ideia rapidinho?"></textarea>
       <label style="margin-top:6px;display:block;">Mensagem inicial Telegram 2</label>
@@ -428,6 +435,7 @@ let campaignState = null;
 let injectionQueueState = null;
 let telegramQueueState = null;
 let isEditing = false;
+let telegramLeadsState = { total: 0, leads: [] };
 
 function toggleAdminPanel(panelId) {
   const panel = document.getElementById(panelId);
@@ -454,7 +462,7 @@ function toggleAdminPanel(panelId) {
   if (panelId === 'credsPanel') loadCredentials();
   if (panelId === 'commercialPanel') loadCommercial();
   if (panelId === 'leadsPanel') { loadLeads(); loadCampaign(); loadInjectionQueue(); }
-  if (panelId === 'telegramPanel') { loadTelegramQueue(); }
+  if (panelId === 'telegramPanel') { loadTelegramQueue(); loadTelegramLeads(); }
 }
 
 function setFilter(mode) {
@@ -2164,7 +2172,9 @@ async function clearFinishedInjectionQueue() {
 async function prepareTelegramCampaign() {
   var msgEl = document.getElementById('telegramMsg');
   if (msgEl) { msgEl.textContent = ''; msgEl.className = 'success-msg'; }
-  var rawText = document.getElementById('telegramImportText').value.trim();
+  var leads = telegramLeadsState.leads || [];
+  if (leads.length === 0) { if (msgEl) { msgEl.className = 'error-msg'; msgEl.textContent = 'Importe leads Telegram antes de preparar.'; } return; }
+  var rawText = leads.map(function(l) { return l.username; }).join('\n');
   var messages = [
     document.getElementById('telegramCampaignMessage1').value.trim(),
     document.getElementById('telegramCampaignMessage2').value.trim(),
@@ -2174,7 +2184,6 @@ async function prepareTelegramCampaign() {
   var minDelaySeconds = Number(document.getElementById('telegramMinDelay').value || 90);
   var maxDelaySeconds = Number(document.getElementById('telegramMaxDelay').value || 240);
   var allowDuplicates = document.getElementById('telegramAllowDuplicates').checked === true;
-  if (!rawText) { if (msgEl) { msgEl.className = 'error-msg'; msgEl.textContent = 'Cole @usernames ou links t.me.'; } return; }
   if (messages.length === 0) { if (msgEl) { msgEl.className = 'error-msg'; msgEl.textContent = 'Digite pelo menos uma mensagem inicial Telegram.'; } return; }
   try {
     var result = await api('POST', '/api/telegram/campaign/prepare', { rawText: rawText, messages: messages, limit: limit, minDelaySeconds: minDelaySeconds, maxDelaySeconds: maxDelaySeconds, allowDuplicates: allowDuplicates });
@@ -2241,6 +2250,7 @@ function renderTelegramQueue(state) {
         '<span class="lead-chip">Enviados: ' + (c.sent || 0) + '/' + total + '</span>' +
         '<span class="lead-chip">Enviando: ' + ((c.claimed || 0) + (c.sending || 0)) + '</span>' +
         '<span class="lead-chip">Pendentes: ' + (c.queued || 0) + '</span>' +
+        '<span class="lead-chip">Pulados: ' + (c.skipped || 0) + '</span>' +
         '<span class="lead-chip">Falhas: ' + (c.failed || 0) + '</span>' +
         '<span class="lead-chip">Próximo: ' + escapeHtml(nextDue) + '</span>' +
       '</div>' +
@@ -2315,6 +2325,61 @@ async function clearTelegramCampaign() {
   } catch (e) {
     if (msgEl) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
   }
+}
+
+async function importTelegramLeads() {
+  var rawText = document.getElementById('telegramImportText').value;
+  var msgEl = document.getElementById('telegramLeadMsg');
+  msgEl.textContent = ''; msgEl.className = 'success-msg';
+  if (!rawText.trim()) { msgEl.className = 'error-msg'; msgEl.textContent = 'Cole os @usernames antes de importar.'; return; }
+  try {
+    var result = await api('POST', '/api/telegram-leads/import', { rawText: rawText });
+    telegramLeadsState = { total: result.total, leads: result.leads };
+    msgEl.textContent = 'Importados: ' + result.imported + ' | Atualizados: ' + result.updated + ' | Total: ' + result.total;
+    document.getElementById('telegramImportText').value = '';
+    renderTelegramLeads(telegramLeadsState);
+  } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+}
+
+async function loadTelegramLeads() {
+  var msgEl = document.getElementById('telegramLeadMsg');
+  try {
+    var result = await api('GET', '/api/telegram-leads');
+    telegramLeadsState = { total: result.total, leads: result.leads };
+    msgEl.textContent = 'Lista atualizada: ' + result.total + ' leads.';
+    renderTelegramLeads(telegramLeadsState);
+  } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+}
+
+async function clearTelegramLeads() {
+  var msgEl = document.getElementById('telegramLeadMsg');
+  msgEl.textContent = ''; msgEl.className = 'success-msg';
+  if (!confirm('Limpar todos os leads Telegram?')) return;
+  try {
+    var result = await api('POST', '/api/telegram-leads/clear');
+    telegramLeadsState = { total: 0, leads: [] };
+    msgEl.textContent = 'Leads Telegram limpos.';
+    renderTelegramLeads(telegramLeadsState);
+  } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+}
+
+function renderTelegramLeads(state) {
+  var container = document.getElementById('telegramLeadsContent');
+  if (!state || !state.leads || state.leads.length === 0) {
+    container.innerHTML = '<div class="empty" style="margin-top:8px;">Nenhum lead Telegram importado.</div>';
+    return;
+  }
+  var html = '<div class="lead-summary"><span class="lead-chip">' + state.total + ' leads</span></div>';
+  html += '<div class="lead-list-preview">';
+  var preview = state.leads.slice(0, 50);
+  for (var i = 0; i < preview.length; i++) {
+    html += '<div>@' + escapeHtml(preview[i].username) + '</div>';
+  }
+  if (state.leads.length > 50) {
+    html += '<div style="color:#999;">... e mais ' + (state.leads.length - 50) + '</div>';
+  }
+  html += '</div>';
+  container.innerHTML = html;
 }
 
 setInterval(async function() {

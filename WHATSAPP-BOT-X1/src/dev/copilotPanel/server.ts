@@ -24,6 +24,7 @@ import { telegramInjectionQueue, normalizeTelegramUsername } from "../../service
 import { telegramIdentityMap } from "../../services/telegramIdentityMap";
 import { initialMessageHistory } from "../../services/initialMessageHistory";
 import { telegramSentHistory } from "../../services/telegramSentHistory";
+import { telegramLeadStore } from "../../services/telegramLeadStore";
 
 // ─── Approved Responses (few-shot) ──────────────────────────
 const APPROVED_FILE = path.resolve(process.cwd(), "data", "approved-responses.json");
@@ -1384,6 +1385,29 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     if (method === "POST" && url === "/api/inject-telegram/queue/pause") {
       telegramInjectionQueue.pause();
       jsonResponse(res, 200, telegramInjectionQueue.status());
+      return;
+    }
+
+    // GET /api/telegram-leads
+    if (method === "GET" && url === "/api/telegram-leads") {
+      const leads = telegramLeadStore.list();
+      jsonResponse(res, 200, { total: leads.length, leads });
+      return;
+    }
+
+    // POST /api/telegram-leads/import
+    if (method === "POST" && url === "/api/telegram-leads/import") {
+      const body = await parseBody(req);
+      const rawText = String(body.rawText || "").trim();
+      if (!rawText) { jsonResponse(res, 400, { error: "rawText obrigatorio" }); return; }
+      jsonResponse(res, 200, telegramLeadStore.importFromText(rawText));
+      return;
+    }
+
+    // POST /api/telegram-leads/clear
+    if (method === "POST" && url === "/api/telegram-leads/clear") {
+      telegramLeadStore.clear();
+      jsonResponse(res, 200, { total: 0, leads: [] });
       return;
     }
 

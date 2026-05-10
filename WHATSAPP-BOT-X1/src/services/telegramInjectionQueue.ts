@@ -3,7 +3,7 @@ import * as path from "path";
 import { randomUUID } from "crypto";
 import { telegramSentHistory } from "./telegramSentHistory";
 
-export type TelegramInjectionTaskStatus = "queued" | "claimed" | "sending" | "sent" | "failed";
+export type TelegramInjectionTaskStatus = "queued" | "claimed" | "sending" | "sent" | "failed" | "skipped";
 export type TelegramInjectionTaskSource = "manual_reply" | "initial_campaign";
 export type TelegramQueueMode = "paused" | "running";
 
@@ -70,7 +70,7 @@ function counts(tasks: TelegramInjectionTask[]): Record<TelegramInjectionTaskSta
       acc[task.status]++;
       return acc;
     },
-    { queued: 0, claimed: 0, sending: 0, sent: 0, failed: 0 } as Record<TelegramInjectionTaskStatus, number>
+    { queued: 0, claimed: 0, sending: 0, sent: 0, failed: 0, skipped: 0 } as Record<TelegramInjectionTaskStatus, number>
   );
 }
 
@@ -133,6 +133,10 @@ class TelegramInjectionQueue {
     const skipped: Array<{ username: string; reason: string }> = [];
     let offsetSeconds = 0;
     const now = Date.now();
+    // Limpa tasks antigas sent/failed antes de preparar nova campanha
+    state.tasks = state.tasks.filter(
+      (task) => task.status === "queued" || task.status === "claimed" || task.status === "sending"
+    );
     for (const username of selected) {
       if (!input.allowDuplicates && activeUsernames.has(username.toLowerCase())) {
         skipped.push({ username, reason: "ja_esta_na_fila" });
@@ -145,14 +149,13 @@ class TelegramInjectionQueue {
           username,
           text: messages[Math.floor(Math.random() * messages.length)],
           source: "initial_campaign",
-          status: "sent", // marca direto como sent/skipped visualmente
+          status: "skipped",
           dueAt: undefined,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-          sentAt: new Date().toISOString(),
           error: "pulado: ja recebeu abordagem inicial",
         };
-        // não adiciona na fila, só registra no skipped
+        state.tasks.push(item); // ← agora grava no state
         continue;
       }
       offsetSeconds += randomDelaySeconds(input.minDelaySeconds, input.maxDelaySeconds);
@@ -234,7 +237,9 @@ class TelegramInjectionQueue {
 
   clearFinished(): void {
     const state = loadState();
-    state.tasks = state.tasks.filter((task) => task.status !== "sent" && task.status !== "failed");
+    state.tasks = state.tasks.filter(
+      (task) => task.status !== "sent" && task.status !== "failed" && task.status !== "skipped"
+    );
     saveState(state);
   }
 
