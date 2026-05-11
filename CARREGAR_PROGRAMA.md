@@ -30,3 +30,12 @@ Passando aqui: vi seu contato em um grupo de estudos e estou mostrando uma ideia
 Te chamei porque estou mostrando um material simples para quem estuda e quer se organizar melhor com rotina, provas e metas. Posso te explicar rapidinho como funciona?
 
 Vi seu contato em um grupo de estudos e estou divulgando uma ideia prática para ajudar na organização dos estudos. Posso te mostrar em poucas mensagens?
+
+Oi! Encontrei seu contato em um grupo de estudos e queria compartilhar uma ideia simples para ajudar estudantes a se planejarem melhor com tarefas, provas e objetivos. Posso te explicar rapidinho?
+
+Passando aqui porque vi seu número em um grupo de estudos e estou apresentando um material prático para quem quer organizar melhor a rotina, os trabalhos e as metas acadêmicas. Quer que eu te mostre em poucas mensagens?
+
+Olá! Vi seu contato em um grupo de estudos e pensei em te enviar uma ideia para facilitar a organização de provas, tarefas e metas. Posso te explicar rapidinho como funciona?
+
+40 mensagens minimo por dia. nada mais
+
