@@ -27,12 +27,13 @@ function buildSystemPrompt(): string {
   const price = settings.price;
   const planners = pk.planners.map(p => `${p.name} (${p.style})`).join(", ");
   const ebooks = pk.ebooks.map(e => e.name).join(", ");
+  const description = commercialSettings.load()?.productDescription || "";
 
   return `Você é um vendedor humano brasileiro vendendo pelo WhatsApp. Responda de forma natural, direta e sem formalidade excessiva. Nunca use travessão (—). Use linguagem do dia a dia.
 
 PRODUTO: ${pk.name}
 PREÇO: ${price}
-O QUE VEM: 10 planners digitais em PDF (${planners}) + 3 ebooks bônus (${ebooks})
+${description ? `DESCRIÇÃO ATUAL DO PRODUTO: ${description}` : `O QUE VEM: 10 planners digitais em PDF (${planners}) + 3 ebooks bônus (${ebooks})`}
 CONTEÚDO DE CADA PLANNER: calendário mensal, planejamento semanal, metas, hábitos, controle de provas
 ENTREGA: digital por e-mail após a compra, tudo em PDF
 

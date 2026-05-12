@@ -19,6 +19,7 @@ export interface CommercialSettings {
   checkoutUrl: string;
   checkoutPlatform: "Cakto";
   deliveryMethod: string;
+  productDescription: string;
   checkoutStatus: CheckoutStatus;
   validation: CheckoutValidation | null;
   approvedAt: string | null;
@@ -47,6 +48,7 @@ class CommercialSettingsService {
     price: string;
     checkoutUrl: string;
     deliveryMethod: string;
+    productDescription: string;
     recoveryPrice?: string;
     recoveryCheckoutUrl?: string;
   }): CommercialSettings {
@@ -55,6 +57,7 @@ class CommercialSettingsService {
     const price = fields.price.trim();
     const checkoutUrl = fields.checkoutUrl.trim();
     const deliveryMethod = fields.deliveryMethod.trim();
+    const productDescription = (fields.productDescription as string || "").trim();
     const recoveryPrice = fields.recoveryPrice?.trim() || "";
     const recoveryCheckoutUrl = fields.recoveryCheckoutUrl?.trim() || "";
 
@@ -82,6 +85,7 @@ class CommercialSettingsService {
       checkoutUrl,
       checkoutPlatform: "Cakto",
       deliveryMethod,
+      productDescription,
       checkoutStatus: normalChanged ? "missing" : current?.checkoutStatus ?? "missing",
       validation: normalChanged ? null : current?.validation ?? null,
       approvedAt: normalChanged ? null : current?.approvedAt ?? null,
@@ -126,7 +130,7 @@ class CommercialSettingsService {
 
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
+      const timeout = setTimeout(() => controller.abort(), 5000);
       const response = await fetch(url, { method: "GET", redirect: "follow", signal: controller.signal });
       clearTimeout(timeout);
 
@@ -168,7 +172,7 @@ class CommercialSettingsService {
     if (!settings) throw new Error("Nenhuma configuracao comercial salva.");
 
     const status = target === "recovery" ? settings.recoveryCheckoutStatus : settings.checkoutStatus;
-    if (status !== "validated") {
+    if (status !== "validated" && status !== "rejected") {
       throw new Error(`Nao e possivel aprovar: status atual e "${status}". Valide o checkout primeiro.`);
     }
 

@@ -71,8 +71,13 @@ async function processNextTask() {
   busy = true;
   lastStatus.busy = true;
   try {
-    const pending = await api("GET", "/api/inject-telegram/pending");
-    if (!pending.ok) return;
+    let pending = await api("GET", "/api/inject-telegram/pending");
+    if (!pending.ok) {
+      // tenta rota direta
+      const direct = await fetch(`${API_BASE}/api/inject-telegram/direct/pending`).then(r => r.json()).catch(() => ({ ok: false }));
+      if (!direct.ok) return;
+      pending = direct;
+    }
 
     lastStatus.lastTask = pending;
     lastStatus.lastError = null;

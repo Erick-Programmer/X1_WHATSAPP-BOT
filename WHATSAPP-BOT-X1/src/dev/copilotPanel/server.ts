@@ -26,6 +26,8 @@ import { initialMessageHistory } from "../../services/initialMessageHistory";
 import { telegramSentHistory } from "../../services/telegramSentHistory";
 import { telegramLeadStore } from "../../services/telegramLeadStore";
 
+let pendingInjectTelegram: { taskId: string; username: string; text: string } | null = null;
+
 // ─── Approved Responses (few-shot) ──────────────────────────
 const APPROVED_FILE = path.resolve(process.cwd(), "data", "approved-responses.json");
 
@@ -1139,6 +1141,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           price,
           checkoutUrl,
           deliveryMethod,
+          productDescription: (body.productDescription as string) || "",
           recoveryPrice,
           recoveryCheckoutUrl,
         });
@@ -1297,6 +1300,28 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     if (method === "POST" && url === "/api/inject-whatsapp/queue/clear-stuck") {
       injectionQueue.clearStuck(2);
       jsonResponse(res, 200, injectionQueue.status());
+      return;
+    }
+
+    // POST /api/inject-telegram/direct
+    if (method === "POST" && url === "/api/inject-telegram/direct") {
+      const body = await parseBody(req);
+      const resolvedUsername = telegramIdentityMap.resolve(body.username as string);
+      pendingInjectTelegram = { taskId: `direct_${Date.now()}`, username: resolvedUsername, text: body.text as string };
+      if (body.intent && body.text) saveApprovedResponse(body.intent as string, body.text as string);
+      jsonResponse(res, 200, { ok: true, taskId: pendingInjectTelegram.taskId });
+      return;
+    }
+
+    // GET /api/inject-telegram/direct/pending
+    if (method === "GET" && url === "/api/inject-telegram/direct/pending") {
+      if (pendingInjectTelegram) {
+        const payload = pendingInjectTelegram;
+        pendingInjectTelegram = null;
+        jsonResponse(res, 200, { ok: true, ...payload });
+      } else {
+        jsonResponse(res, 200, { ok: false });
+      }
       return;
     }
 

@@ -873,7 +873,7 @@ async function injectTelegramEdited(reviewId, suggestionId, username) {
   const review = reviews.find(r => r.id === reviewId);
   if (!review) return;
 
-  const response = await fetch('http://127.0.0.1:8787/api/inject-telegram', {
+  const response = await fetch('http://127.0.0.1:8787/api/inject-telegram/direct', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username: username, text: editedText, intent: review.intent })
@@ -1759,6 +1759,8 @@ function renderCommercial(state) {
         '<div style="margin-bottom:5px;"><label>Preço recuperação</label><input type="text" id="comRecoveryPrice" placeholder="R$ 17,00" value="' + escapeHtml(state.settings?.recoveryPrice || '') + '"></div>' +
         '<div style="margin-bottom:5px;"><label>Link checkout recuperação</label><input type="text" id="comRecoveryCheckoutUrl" placeholder="https://pay.cakto.com.br/..." value="' + escapeHtml(state.settings?.recoveryCheckoutUrl || '') + '"></div>' +
         '<div style="margin-bottom:5px;"><label>Método de entrega</label><input type="text" id="comDeliveryMethod" placeholder="download" value="' + escapeHtml(state.settings?.deliveryMethod || '') + '"></div>' +
+        '<div style="margin-bottom:5px;"><label>Descrição do produto (o DeepSeek vai usar isso)</label>' +
+        '<textarea id="comProductDescription" style="min-height:80px;" placeholder="Ex: 3 planners digitais em PDF (DEEP TECH, CANDY DREAM, CYBER FOCUS). Na página de checkout o cliente pode adicionar +4 planners por R$ 5 ou +10 planners por R$ 10.">' + escapeHtml(state.settings?.productDescription || '') + '</textarea></div>' +
         '<div class="flex" style="margin-top:6px;">' +
           '<button class="btn btn-primary" onclick="handleSaveCommercial()">Salvar configurações</button>' +
           (state.hasSettings ? '<button class="btn btn-secondary" onclick="cancelCommercialForm()">Cancelar</button>' : '') +
@@ -1810,10 +1812,10 @@ function renderCommercial(state) {
       '<div class="flex" style="margin-top:6px;">' +
         '<button class="btn btn-warning" onclick="showCommercialFormFn()">Editar</button>' +
         '<button class="btn btn-success" onclick="handleValidateCheckout()">Validar normal</button>' +
-        (checkoutStatus === 'validated' ? '<button class="btn btn-success" onclick="handleApproveCommercial()">Aprovar</button>' : '') +
+        (checkoutStatus === 'validated' || checkoutStatus === 'rejected' ? '<button class="btn btn-success" onclick="handleApproveCommercial()">Aprovar</button>' : '') +
         (checkoutStatus !== 'missing' && checkoutStatus !== 'approved' ? '<button class="btn btn-secondary" onclick="handleRejectCommercial()">Rejeitar</button>' : '') +
         (s.recoveryCheckoutUrl ? '<button class="btn btn-success" onclick="handleValidateRecoveryCheckout()">Validar recuperação</button>' : '') +
-        (recoveryStatus === 'validated' ? '<button class="btn btn-success" onclick="handleApproveRecoveryCommercial()">Aprovar recuperação</button>' : '') +
+        (recoveryStatus === 'validated' || recoveryStatus === 'rejected' ? '<button class="btn btn-success" onclick="handleApproveRecoveryCommercial()">Aprovar recuperação</button>' : '') +
         (s.recoveryCheckoutUrl && recoveryStatus !== 'missing' && recoveryStatus !== 'approved' ? '<button class="btn btn-secondary" onclick="handleRejectRecoveryCommercial()">Rejeitar recuperação</button>' : '') +
         '<button class="btn btn-danger" onclick="handleResetCommercial()">Resetar</button>' +
       '</div><div id="comMsg" class="success-msg"></div>';
@@ -1838,11 +1840,12 @@ async function handleSaveCommercial() {
   var recoveryPrice = document.getElementById('comRecoveryPrice').value.trim();
   var recoveryCheckoutUrl = document.getElementById('comRecoveryCheckoutUrl').value.trim();
   var deliveryMethod = document.getElementById('comDeliveryMethod').value.trim();
+  var productDescription = document.getElementById('comProductDescription').value.trim();
   var msgEl = document.getElementById('comMsg');
   msgEl.textContent = ''; msgEl.className = 'success-msg';
   if (!productName || !price) { msgEl.className = 'error-msg'; msgEl.textContent = 'Nome do produto e preço são obrigatórios.'; return; }
   try {
-    var result = await api('POST', '/api/commercial-settings/save', { productName: productName, price: price, checkoutUrl: checkoutUrl, deliveryMethod: deliveryMethod, recoveryPrice: recoveryPrice, recoveryCheckoutUrl: recoveryCheckoutUrl });
+    var result = await api('POST', '/api/commercial-settings/save', { productName: productName, price: price, checkoutUrl: checkoutUrl, deliveryMethod: deliveryMethod, recoveryPrice: recoveryPrice, recoveryCheckoutUrl: recoveryCheckoutUrl, productDescription: productDescription });
     commercialState = { hasSettings: true, settings: result.settings };
     showCommercialForm = false; renderCommercial(commercialState);
     msgEl.textContent = 'Configurações salvas!';

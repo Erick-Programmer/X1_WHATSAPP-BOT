@@ -68,7 +68,7 @@ function readEventExamples(): TextExample[] {
 
   const sentByReview = new Map<string, TextExample>();
   const examples: TextExample[] = [];
-  const lines = fs.readFileSync(LOG_FILE, "utf-8").split("\n").filter((line) => line.trim());
+  const lines = fs.readFileSync(LOG_FILE, "utf-8").split("\n").filter((line) => line.trim()).slice(-500);
 
   for (const line of lines) {
     try {
@@ -195,9 +195,7 @@ function scoreOne(review: ReviewItem, suggestion: ReplySuggestion, sales: TextEx
   };
 }
 
-export function scoreReviewSuggestions(review: ReviewItem): ReviewItem {
-  const sales = readEventExamples();
-  const approved = readApprovedExamples();
+export function scoreReviewSuggestions(review: ReviewItem, sales: TextExample[], approved: TextExample[]): ReviewItem {
   const scoredSuggestions = review.suggestions.map((suggestion) => ({
     ...suggestion,
     ...scoreOne(review, suggestion, sales, approved),
@@ -220,6 +218,18 @@ export function scoreReviewSuggestions(review: ReviewItem): ReviewItem {
   };
 }
 
+let cachedSales: TextExample[] = [];
+let cachedApproved: TextExample[] = [];
+let cacheTs = 0;
+
+function loadCache(): void {
+  if (Date.now() - cacheTs < 30000) return;
+  cachedSales = readEventExamples();
+  cachedApproved = readApprovedExamples();
+  cacheTs = Date.now();
+}
+
 export function scoreReviews(reviews: ReviewItem[]): ReviewItem[] {
-  return reviews.map(scoreReviewSuggestions);
+  loadCache();
+  return reviews.map((r) => scoreReviewSuggestions(r, cachedSales, cachedApproved));
 }
