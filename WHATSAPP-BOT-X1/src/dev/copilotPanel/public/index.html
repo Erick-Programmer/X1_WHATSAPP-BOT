@@ -876,7 +876,12 @@ async function injectTelegramEdited(reviewId, suggestionId, username) {
   const response = await fetch('http://127.0.0.1:8787/api/inject-telegram/direct', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: username, text: editedText, intent: review.intent })
+    body: JSON.stringify({
+      username: username,
+      searchAlias: review.contactName || username,
+      text: editedText,
+      intent: review.intent
+    })
   });
   const result = await response.json();
   if (!result.ok) { alert('Erro: ' + result.error); return; }
@@ -1309,10 +1314,19 @@ async function injectTelegramManualReply(reviewId, username) {
   var text = textarea ? textarea.value.trim() : '';
   if (!text) { alert('Escreva a resposta manual antes.'); return; }
 
-  const response = await fetch('http://127.0.0.1:8787/api/inject-telegram', {
+  const reviews = await api('GET', '/api/reviews');
+  const review = reviews.find(r => r.id === reviewId);
+  const searchAlias = review ? (review.contactName || username) : username;
+
+  const response = await fetch('http://127.0.0.1:8787/api/inject-telegram/direct', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: username, text: text, intent: 'manual_reply' })
+    body: JSON.stringify({
+      username: username,
+      searchAlias: searchAlias,
+      text: text,
+      intent: 'manual_reply'
+    })
   });
   const result = await response.json();
   if (!result.ok) { alert('Erro: ' + result.error); return; }

@@ -71,12 +71,13 @@ async function processNextTask() {
   busy = true;
   lastStatus.busy = true;
   try {
-    let pending = await api("GET", "/api/inject-telegram/pending");
+    let pending = await fetch(`${API_BASE}/api/inject-telegram/direct/pending`)
+      .then(r => r.json())
+      .catch(() => ({ ok: false }));
+
     if (!pending.ok) {
-      // tenta rota direta
-      const direct = await fetch(`${API_BASE}/api/inject-telegram/direct/pending`).then(r => r.json()).catch(() => ({ ok: false }));
-      if (!direct.ok) return;
-      pending = direct;
+      pending = await api("GET", "/api/inject-telegram/pending");
+      if (!pending.ok) return;
     }
 
     lastStatus.lastTask = pending;
@@ -94,6 +95,7 @@ async function processNextTask() {
     const result = await sendToContent(tab.id, {
       action: "processTelegramTask",
       username: pending.username,
+      searchAlias: pending.searchAlias,
       text: pending.text
     });
 

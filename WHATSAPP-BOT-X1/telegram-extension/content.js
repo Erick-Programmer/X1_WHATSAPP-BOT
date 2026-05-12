@@ -79,65 +79,108 @@
     return match ? match[1] : "";
   }
 
-  async function openTelegramTarget(username) {
+  async function openTelegramTarget(username, searchAlias) {
     const peerId = peerIdFromTarget(username);
 
-    // verifica se já está aberto
-    const openedComposer = document.querySelector('.input-message-input[contenteditable="true"]:not(.input-field-input-fake)');
-    if (openedComposer) {
-      const currentPeerId = openedComposer.getAttribute("data-peer-id") || "";
-      if (peerId && currentPeerId === peerId) return peerId;
+    function getComposerPeer() {
+      const composer = document.querySelector('.input-message-input[contenteditable="true"]:not(.input-field-input-fake)');
+      return composer ? composer.getAttribute("data-peer-id") || "" : "";
     }
 
-    // TENTA NA LISTA LATERAL PRIMEIRO (antes de abrir busca)
-    let row = null;
-    if (peerId) {
-      row = [...document.querySelectorAll(`[data-peer-id="${peerId}"]`)]
-        .filter(el => el.tagName === 'A' && el.className.includes('row-clickable'))
-        .sort((a, b) => Math.abs(a.getBoundingClientRect().top) - Math.abs(b.getBoundingClientRect().top))[0] || null;
+    async function waitForComposerPeer(expectedPeerId, attempts = 20) {
+      for (let i = 0; i < attempts; i++) {
+        await sleep(500);
+        if (getComposerPeer() === expectedPeerId) return true;
+      }
+      return false;
     }
 
-    if (row) {
-      row.scrollIntoView({ block: "center", behavior: "smooth" });
+    async function tryClickPeerRow(row, expectedPeerId) {
+      if (!row) return false;
+
+      try {
+        row.scrollIntoView({ block: "center", behavior: "instant" });
+      } catch {
+        row.scrollIntoView({ block: "center" });
+      }
+
       await sleep(500);
       await clickTelegramRow(row);
-      for (let i = 0; i < 20; i++) {
+
+      return waitForComposerPeer(expectedPeerId, 10);
+    }
+
+    // 1. Se o chat certo ja estiver aberto, usa direto.
+    if (peerId && getComposerPeer() === peerId) return peerId;
+
+    // 2. Tenta row visivel primeiro.
+    if (peerId) {
+      const rows = [...document.querySelectorAll(`[data-peer-id="${peerId}"]`)]
+        .filter((el) => el.tagName === "A" && String(el.className || "").includes("row-clickable"));
+
+      const visibleRow = rows.find(visible);
+      if (await tryClickPeerRow(visibleRow, peerId)) return peerId;
+
+      // 3. Se a row existir mas estiver invisivel/virtualizada, tenta clicar mesmo assim.
+      const invisibleRow = rows.find((row) => !visible(row));
+      if (await tryClickPeerRow(invisibleRow, peerId)) return peerId;
+    }
+
+    // Aguarda a lista lateral terminar de renderizar antes de cair na busca.
+    if (peerId) {
+      for (let i = 0; i < 2; i++) {
         await sleep(500);
-        const composer = document.querySelector('.input-message-input[contenteditable="true"]:not(.input-field-input-fake)');
-        if (composer) return row.getAttribute('data-peer-id') || peerId;
+
+        const lateRows = [...document.querySelectorAll(`[data-peer-id="${peerId}"]`)]
+          .filter((el) => el.tagName === "A" && String(el.className || "").includes("row-clickable"));
+
+        const lateVisibleRow = lateRows.find(visible);
+        if (await tryClickPeerRow(lateVisibleRow, peerId)) return peerId;
+
+        const lateInvisibleRow = lateRows.find((row) => !visible(row));
+        if (await tryClickPeerRow(lateInvisibleRow, peerId)) return peerId;
       }
     }
 
-    // FALLBACK: usa campo de busca
+    // 4. Fallback: usa campo de busca.
     const searchInput = document.querySelector('input.input-search-input');
     if (!searchInput) throw new Error("Campo de busca do Telegram não encontrado.");
+
     searchInput.focus();
-    searchInput.value = '';
-    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+    searchInput.value = "";
+    searchInput.dispatchEvent(new Event("input", { bubbles: true }));
     await sleep(300);
-    searchInput.value = username;
-    searchInput.dispatchEvent(new InputEvent('input', { bubbles: true, data: username }));
+
+    const searchTerm = searchAlias || username;
+
+    searchInput.value = searchTerm;
+    searchInput.dispatchEvent(new InputEvent("input", { bubbles: true, data: searchTerm }));
     await sleep(2000);
 
-    row = [...document.querySelectorAll('a.row-clickable[data-peer-id]')]
-      .find(el => {
-        const pid = el.getAttribute('data-peer-id') || '';
-        if (pid.startsWith('-')) return false;
-        const href = (el.getAttribute('href') || '').toLowerCase();
-        const text = (el.innerText || '').toLowerCase();
-        const target = username.toLowerCase();
+    const target = String(searchTerm || "").toLowerCase();
+
+    const row = [...document.querySelectorAll("a.row-clickable[data-peer-id]")]
+      .find((el) => {
+        const pid = el.getAttribute("data-peer-id") || "";
+        if (pid.startsWith("-")) return false;
+
+        const href = (el.getAttribute("href") || "").toLowerCase();
+        const text = (el.innerText || "").toLowerCase();
+
         return href.includes(target) || text.includes(target);
       });
 
     if (!row) throw new Error(`Contato @${username} não encontrado na busca.`);
 
     await clickTelegramRow(row);
-    const foundPeerId = row.getAttribute('data-peer-id') || '';
+
+    const foundPeerId = row.getAttribute("data-peer-id") || "";
     for (let i = 0; i < 20; i++) {
       await sleep(500);
-      const composer = document.querySelector('.input-message-input[contenteditable="true"]:not(.input-field-input-fake)');
-      if (composer) return foundPeerId || composer.getAttribute('data-peer-id') || '';
+      const composerPeer = getComposerPeer();
+      if (composerPeer) return foundPeerId || composerPeer;
     }
+
     throw new Error(`Chat não abriu para @${username}.`);
   }
 
@@ -230,7 +273,7 @@
         return;
       }
       await markTask(task.taskId, "sending");
-      const expectedPeerId = await openTelegramTarget(task.username);
+      const expectedPeerId = await openTelegramTarget(task.username, task.searchAlias || "");
       const sentResult = await injectTelegramMessage(task.text || "", expectedPeerId);
       await markTask(task.taskId, "sent", undefined, sentResult.peerUsername);
     } catch (err) {
@@ -413,7 +456,7 @@
           return;
         }
         if (message.action === "processTelegramTask") {
-          const expectedPeerId = await openTelegramTarget(message.username || "");
+          const expectedPeerId = await openTelegramTarget(message.username || "", message.searchAlias || "");
           sendResponse(await injectTelegramMessage(message.text || "", expectedPeerId));
           return;
         }

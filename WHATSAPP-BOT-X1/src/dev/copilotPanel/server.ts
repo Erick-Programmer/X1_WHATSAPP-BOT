@@ -26,7 +26,7 @@ import { initialMessageHistory } from "../../services/initialMessageHistory";
 import { telegramSentHistory } from "../../services/telegramSentHistory";
 import { telegramLeadStore } from "../../services/telegramLeadStore";
 
-let pendingInjectTelegram: { taskId: string; username: string; text: string } | null = null;
+let pendingInjectTelegram: { taskId: string; username: string; text: string; searchAlias?: string } | null = null;
 
 // ─── Approved Responses (few-shot) ──────────────────────────
 const APPROVED_FILE = path.resolve(process.cwd(), "data", "approved-responses.json");
@@ -1307,7 +1307,12 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     if (method === "POST" && url === "/api/inject-telegram/direct") {
       const body = await parseBody(req);
       const resolvedUsername = telegramIdentityMap.resolve(body.username as string);
-      pendingInjectTelegram = { taskId: `direct_${Date.now()}`, username: resolvedUsername, text: body.text as string };
+      pendingInjectTelegram = {
+        taskId: `direct_${Date.now()}`,
+        username: resolvedUsername,
+        text: body.text as string,
+        searchAlias: typeof body.searchAlias === "string" ? body.searchAlias : undefined,
+      };
       if (body.intent && body.text) saveApprovedResponse(body.intent as string, body.text as string);
       jsonResponse(res, 200, { ok: true, taskId: pendingInjectTelegram.taskId });
       return;
