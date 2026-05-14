@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { leadStore } from "./leadStore";
 import { initialMessageHistory } from "./initialMessageHistory";
+import { DEFAULT_PRODUCT_ID, normalizeProductId } from "./productContext";
 
 export type CampaignStatus = "idle" | "prepared" | "running" | "paused" | "completed" | "cancelled";
 export type CampaignItemStatus = "queued" | "sending" | "sent" | "skipped" | "failed";
@@ -9,6 +10,7 @@ export type CampaignItemStatus = "queued" | "sending" | "sent" | "skipped" | "fa
 export interface CampaignItem {
   id: string;
   phone: string;
+  productId: string;
   text: string;
   status: CampaignItemStatus;
   createdAt: string;
@@ -23,6 +25,7 @@ export interface CampaignState {
   id: string;
   status: CampaignStatus;
   message: string;
+  productId: string;
   messages?: string[];
   minDelaySeconds: number;
   maxDelaySeconds: number;
@@ -48,6 +51,7 @@ function emptyState(): CampaignState {
     id: "campaign_idle",
     status: "idle",
     message: "",
+    productId: DEFAULT_PRODUCT_ID,
     minDelaySeconds: 45,
     maxDelaySeconds: 120,
     nextDueAt: null,
@@ -111,9 +115,11 @@ class CampaignStore {
     minDelaySeconds?: number;
     maxDelaySeconds?: number;
     allowResendForTest?: boolean;
+    productId?: string;
   }): CampaignState {
     const messages = (options.messages || [options.message]).map((msg) => msg.trim()).filter(Boolean);
     const message = messages[0] || "";
+    const productId = normalizeProductId(options.productId);
     if (!message) throw new Error("Mensagem inicial e obrigatoria.");
 
     const leads = leadStore.list();
@@ -129,6 +135,7 @@ class CampaignStore {
       id: `campaign_${Date.now()}`,
       status: "prepared",
       message,
+      productId,
       messages,
       minDelaySeconds,
       maxDelaySeconds,
@@ -136,10 +143,11 @@ class CampaignStore {
       createdAt: now,
       updatedAt: now,
       items: selected.map((lead) => {
-        const alreadySent = !options.allowResendForTest && initialMessageHistory.hasSent(lead.phone);
+        const alreadySent = !options.allowResendForTest && initialMessageHistory.hasSent(lead.phone, productId);
         return {
           id: crypto.randomUUID(),
           phone: lead.phone,
+          productId,
           text: lead.initialMessage || messages[Math.floor(Math.random() * messages.length)],
           status: alreadySent ? "skipped" : "queued",
           createdAt: now,
@@ -152,8 +160,8 @@ class CampaignStore {
     return this.save(state);
   }
 
-  recordInitialSent(campaignItemId: string | undefined, phone: string, text: string): void {
-    initialMessageHistory.recordSent({ phone, text, campaignItemId });
+  recordInitialSent(campaignItemId: string | undefined, phone: string, text: string, productId: string = DEFAULT_PRODUCT_ID): void {
+    initialMessageHistory.recordSent({ phone, text, campaignItemId, productId });
   }
 
   start(): CampaignState {
@@ -189,7 +197,7 @@ class CampaignStore {
     return this.save(emptyState());
   }
 
-  claimNextForSend(): { phone: string; text: string; campaignItemId: string } | null {
+  claimNextForSend(): { phone: string; text: string; campaignItemId: string; productId: string } | null {
     const state = this.load();
     if (state.status !== "running" || !state.nextDueAt) return null;
     if (Date.now() < new Date(state.nextDueAt).getTime()) return null;
@@ -219,7 +227,7 @@ class CampaignStore {
     }
 
     this.save(state);
-    return { phone: item.phone, text: item.text, campaignItemId: item.id };
+    return { phone: item.phone, text: item.text, campaignItemId: item.id, productId: item.productId || state.productId || DEFAULT_PRODUCT_ID };
   }
 
   markItemSent(campaignItemId: string | undefined): CampaignState {

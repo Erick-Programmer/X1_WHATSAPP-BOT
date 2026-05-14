@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { ReviewItem } from "../types/copilot";
+import { normalizeProductId } from "./productContext";
 
 /**
  * Path to the reviews persistence file.
@@ -36,6 +37,7 @@ function normalizeReview(raw: Record<string, unknown>): ReviewItem {
   return {
     id: raw.id as string,
     contactId: raw.contactId as string,
+    productId: normalizeProductId(raw.productId as string | undefined),
     messageId: raw.messageId as string,
     customerMessage: raw.customerMessage as string,
     intent: raw.intent as ReviewItem["intent"],

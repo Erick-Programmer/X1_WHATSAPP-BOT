@@ -30,6 +30,7 @@ interface CopilotEvent {
   event: string;
   reviewId: string;
   contactId: string;
+  productId?: string;
   messageId: string;
   intent: string;
   customerMessage: string;
@@ -49,6 +50,7 @@ interface SaleOutcomeEvent {
   event: "sale_outcome";
   reviewId: string;
   contactId: string;
+  productId?: string;
   messageId: string;
   intent: string;
   customerMessage: string;
@@ -68,6 +70,7 @@ interface ManualSuggestionSentEvent {
   event: "manual_suggestion_sent";
   reviewId: string;
   contactId: string;
+  productId?: string;
   messageId: string;
   intent: string;
   customerMessage: string;
@@ -99,6 +102,7 @@ export function logReviewCreated(item: ReviewItem): void {
   const base = {
     reviewId: item.id,
     contactId: item.contactId,
+    productId: item.productId,
     messageId: item.messageId,
     intent: item.intent,
     customerMessage: item.customerMessage,
@@ -130,6 +134,7 @@ export function logSuggestionApproved(item: ReviewItem): void {
     event: "suggestion_approved",
     reviewId: item.id,
     contactId: item.contactId,
+    productId: item.productId,
     messageId: item.messageId,
     intent: item.intent,
     customerMessage: item.customerMessage,
@@ -150,6 +155,7 @@ export function logSuggestionSent(item: ReviewItem): void {
     event: "suggestion_sent",
     reviewId: item.id,
     contactId: item.contactId,
+    productId: item.productId,
     messageId: item.messageId,
     intent: item.intent,
     customerMessage: item.customerMessage,
@@ -169,6 +175,7 @@ export function logReviewCancelled(item: ReviewItem): void {
     event: "review_cancelled",
     reviewId: item.id,
     contactId: item.contactId,
+    productId: item.productId,
     messageId: item.messageId,
     intent: item.intent,
     customerMessage: item.customerMessage,
@@ -185,6 +192,7 @@ export function logReviewExpired(item: ReviewItem): void {
     event: "review_expired",
     reviewId: item.id,
     contactId: item.contactId,
+    productId: item.productId,
     messageId: item.messageId,
     intent: item.intent,
     customerMessage: item.customerMessage,
@@ -200,6 +208,7 @@ export function logSuggestionsRegenerated(item: ReviewItem): void {
   const base = {
     reviewId: item.id,
     contactId: item.contactId,
+    productId: item.productId,
     messageId: item.messageId,
     intent: item.intent,
     customerMessage: item.customerMessage,
@@ -237,6 +246,7 @@ export function logSaleOutcome(
     event: "sale_outcome",
     reviewId: item.id,
     contactId: item.contactId,
+    productId: item.productId,
     messageId: item.messageId,
     intent: item.intent,
     customerMessage: item.customerMessage,
@@ -261,6 +271,7 @@ export function logManualSuggestionSent(item: ReviewItem): void {
     event: "manual_suggestion_sent",
     reviewId: item.id,
     contactId: item.contactId,
+    productId: item.productId,
     messageId: item.messageId,
     intent: item.intent,
     customerMessage: item.customerMessage,

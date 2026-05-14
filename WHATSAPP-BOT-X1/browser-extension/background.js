@@ -41,6 +41,16 @@ function getWhatsAppTab() {
   });
 }
 
+async function getWhatsAppTabWithRetry(retries = 10, delayMs = 1000) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const tab = await getWhatsAppTab();
+    if (tab) return tab;
+    console.warn(`[Copiloto] WhatsApp tab nao encontrada. Tentativa ${attempt}/${retries}`);
+    await sleep(delayMs);
+  }
+  return null;
+}
+
 function waitForTabComplete(tabId, timeoutMs = 15000) {
   return new Promise((resolve) => {
     let done = false;
@@ -94,7 +104,7 @@ async function injectToWhatsApp(phone, text) {
   const digits = String(phone || "").replace(/\D/g, "");
   if (digits.length < 10) return { ok: false, error: "Telefone invalido para envio." };
 
-  const tab = await getWhatsAppTab();
+  const tab = await getWhatsAppTabWithRetry();
   if (!tab || !tab.id) return { ok: false, error: "WhatsApp Web nao aberto" };
 
   const targetUrl = `https://web.whatsapp.com/send?phone=${encodeURIComponent(digits)}`;

@@ -392,8 +392,27 @@ input[type="text"] { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4p
         <div class="stat-item"><div class="stat-value" id="statConv">0.00%</div><div class="stat-label">Conversão</div></div>
       </div>
     </div>
+    <div style="margin-top:10px;border-top:1px solid #e5e5e5;padding-top:10px;">
+      <label>Mostrar atendimentos</label>
+      <div class="flex">
+        <select id="reviewsDaysFilter" onchange="setReviewsDaysFilter()" style="padding:6px;border:1px solid #ccc;border-radius:4px;">
+          <option value="7">Últimos 7 dias + pendentes</option>
+          <option value="15" selected>Últimos 15 dias + pendentes</option>
+          <option value="30">Últimos 30 dias + pendentes</option>
+          <option value="all">Todos</option>
+        </select>
+        <button class="btn btn-warning" onclick="archiveOldReviews()">Arquivar antigos</button>
+      </div>
+      <div id="archiveMsg" style="font-size:0.78rem;color:#666;margin-top:6px;"></div>
+    </div>
   </div>
-
+  <div style="display:flex;align-items:center;gap:8px;margin:8px 0 10px;padding:8px;border:1px solid #bfdbfe;border-radius:6px;background:#eff6ff;">
+    <label style="font-size:0.82rem;font-weight:700;color:#075985;margin:0;">Filtrar produto</label>
+    <select id="reviewProductFilter" onchange="setReviewProductFilter(this.value)" style="padding:6px;border:1px solid #93c5fd;border-radius:4px;background:white;min-width:260px;">
+      <option value="all">Todos os produtos</option>
+    </select>
+    <span id="reviewProductFilterHint" style="font-size:0.76rem;color:#64748b;"></span>
+  </div>
   <div class="filter-bar" id="filterBar">
     <button class="fb-btn active" data-filter="active" onclick="setFilter('active')">Ativos</button>
     <button class="fb-btn" data-filter="bought" onclick="setFilter('bought')">Comprados</button>
@@ -424,11 +443,15 @@ let filterMode = 'active';
 let priorityMode = 'all';
 let selectedGroupKey = null;
 let allReviews = [];
+let reviewsDaysFilter = '15';
 let allGroupedReviews = [];
 let runtimeState = null;
 let credentialsState = null;
 let showCredentialsForm = false;
 let commercialState = null;
+let productCatalogState = null;
+let activeProductId = 'planner_estudante_pro';
+let reviewProductFilter = 'all';
 let showCommercialForm = false;
 let leadsState = { total: 0, leads: [] };
 let campaignState = null;
@@ -534,18 +557,25 @@ function escapeHtml(str) {
   return str.replace(/[&]/g, '&').replace(/[<]/g, '<').replace(/[>]/g, '>').replace(/["]/g, '"').replace(/[']/g, '&#039;');
 }
 
-function getSuggestionReminder(intent) {
+function getSuggestionReminder(intent, review) {
+  var productId = getReviewProductId(review);
+
+  if (productId !== 'planner_estudante_pro') {
+    return 'Mensagem apenas em texto.';
+  }
+
   var map = {
     positive_confirmation: 'Depois de enviar o texto, anexe assets/produto-planners.png ou assets/produto-completo-preview.gif se quiser mostrar o pacote em movimento.',
     ask_content: 'Se a pessoa pedir para ver melhor o produto, envie assets/produto-completo-preview.gif.',
-    ask_price: 'Esta resposta pode incluir o link de checkout aprovado, se configurado.',
+    ask_delivery: 'Mensagem apenas em texto.',
+    ask_price: 'Mensagem apenas em texto.',
     buy_intent: 'Esta resposta pode incluir o link de checkout aprovado, se configurado.',
-    objection_expensive: 'Mensagem apenas em texto.',
-    objection_think: 'Mensagem apenas em texto.',
     unknown: 'Mensagem apenas em texto.'
   };
+
   return map[intent] || null;
 }
+
 
 function statusTag(status) {
   var map = { pending_review: 'tag-pending', approved: 'tag-approved', sent: 'tag-sent', cancelled: 'tag-cancelled', expired: 'tag-expired' };
@@ -824,9 +854,102 @@ function getPriorityCounts(reviews) {
   return counts;
 }
 
-async function injectWhatsApp(reviewId, suggestionId, phone) {
+async function getReviewById(reviewId) {
   const reviews = await api('GET', '/api/reviews');
-  const review = reviews.find(r => r.id === reviewId);
+  return reviews.find(function(r) { return r.id === reviewId; });
+}
+
+function getReviewProductId(review) {
+  return (review && review.productId) || activeProductId || 'planner_estudante_pro';
+}
+
+function getKnownReviewProductIds(reviews) {
+  var ids = new Set();
+
+  if (productCatalogState && productCatalogState.products) {
+    Object.keys(productCatalogState.products).forEach(function(id) {
+      if (id) ids.add(id);
+    });
+  }
+
+  (reviews || []).forEach(function(review) {
+    var id = getReviewProductId(review);
+    if (id) ids.add(id);
+  });
+
+  return Array.from(ids).sort(function(a, b) {
+    if (a === activeProductId) return -1;
+    if (b === activeProductId) return 1;
+    return a.localeCompare(b);
+  });
+}
+
+function renderReviewProductFilter(reviews) {
+  var select = document.getElementById('reviewProductFilter');
+  if (!select) return;
+
+  var ids = getKnownReviewProductIds(reviews);
+  var current = reviewProductFilter || 'all';
+
+  var html = '<option value="all">Todos os produtos</option>';
+  ids.forEach(function(id) {
+    var name = getProductNameById(id);
+    var label = name && name !== id ? name + ' (' + id + ')' : id;
+    html += '<option value="' + escapeHtml(id) + '"' + (id === current ? ' selected' : '') + '>' + escapeHtml(label) + '</option>';
+  });
+
+  select.innerHTML = html;
+
+  if (current !== 'all' && ids.indexOf(current) === -1) {
+    reviewProductFilter = 'all';
+    select.value = 'all';
+  } else {
+    select.value = current;
+  }
+
+  var hint = document.getElementById('reviewProductFilterHint');
+  if (hint) {
+    hint.textContent = reviewProductFilter === 'all'
+      ? 'Mostrando todos'
+      : 'Mostrando apenas: ' + getProductNameById(reviewProductFilter);
+  }
+}
+
+function filterReviewsByProduct(reviews) {
+  if (reviewProductFilter === 'all') return reviews || [];
+
+  return (reviews || []).filter(function(review) {
+    return getReviewProductId(review) === reviewProductFilter;
+  });
+}
+
+function setReviewProductFilter(value) {
+  reviewProductFilter = value || 'all';
+  selectedGroupKey = null;
+  renderReviews(allReviews);
+}
+
+function getProductNameById(productId) {
+  var catalog = productCatalogState || { products: {} };
+  var products = catalog.products || {};
+  var id = productId || 'planner_estudante_pro';
+  return products[id] ? products[id].name : id;
+}
+
+function renderProductBadge(review) {
+  var productId = getReviewProductId(review);
+  var productName = getProductNameById(productId);
+
+  return '' +
+    '<div style="margin:6px 0;padding:6px 8px;border:1px solid #bfdbfe;border-radius:6px;background:#eff6ff;color:#075985;font-size:0.78rem;">' +
+      '<strong>Produto:</strong> ' + escapeHtml(productName) +
+      '<span style="color:#64748b;"> · ' + escapeHtml(productId) + '</span>' +
+    '</div>';
+}
+
+
+async function injectWhatsApp(reviewId, suggestionId, phone) {
+  const review = await getReviewById(reviewId);
   if (!review) return;
   const suggestion = review.suggestions.find(s => s.id === suggestionId);
   if (!suggestion) return;
@@ -834,11 +957,19 @@ async function injectWhatsApp(reviewId, suggestionId, phone) {
   const response = await fetch('http://127.0.0.1:8787/api/inject-whatsapp', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone, text: suggestion.text, intent: review.intent })
+    body: JSON.stringify({
+      phone: phone,
+      text: suggestion.text,
+      intent: review.intent,
+      productId: getReviewProductId(review)
+    })
   });
   const result = await response.json();
   if (!result.ok) { alert('Erro: ' + result.error); return; }
-  try { await api('POST', '/api/reviews/' + reviewId + '/manual-sent', { suggestionId: suggestionId }); } catch(e) {}
+  try { await api('POST', '/api/reviews/' + reviewId + '/manual-sent', {
+    suggestionId: suggestionId,
+    productId: getReviewProductId(review)
+  }); } catch(e) {}
   await new Promise(r => setTimeout(r, 4000)); // aguarda antes de recarregar
   await loadReviews();
 }
@@ -848,18 +979,26 @@ async function injectWhatsAppEdited(reviewId, suggestionId, phone) {
   const editedText = textarea ? textarea.value.trim() : '';
   if (!editedText) { alert('Texto vazio.'); return; }
 
-  const reviews = await api('GET', '/api/reviews');
-  const review = reviews.find(r => r.id === reviewId);
+  const review = await getReviewById(reviewId);
   if (!review) return;
 
   const response = await fetch('http://127.0.0.1:8787/api/inject-whatsapp', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone, text: editedText, intent: review.intent })
+    body: JSON.stringify({
+      phone: phone,
+      text: editedText,
+      intent: review.intent,
+      productId: getReviewProductId(review)
+    })
   });
   const result = await response.json();
   if (!result.ok) { alert('Erro: ' + result.error); return; }
-  try { await api('POST', '/api/reviews/' + reviewId + '/manual-sent', { suggestionId: suggestionId, text: editedText }); } catch(e) {}
+  try { await api('POST', '/api/reviews/' + reviewId + '/manual-sent', {
+    suggestionId: suggestionId,
+    text: editedText,
+    productId: getReviewProductId(review)
+  }); } catch(e) {}
   await new Promise(r => setTimeout(r, 4000));
   await loadReviews();
 }
@@ -869,8 +1008,7 @@ async function injectTelegramEdited(reviewId, suggestionId, username) {
   const editedText = textarea ? textarea.value.trim() : '';
   if (!editedText) { alert('Texto vazio.'); return; }
 
-  const reviews = await api('GET', '/api/reviews');
-  const review = reviews.find(r => r.id === reviewId);
+  const review = await getReviewById(reviewId);
   if (!review) return;
 
   const response = await fetch('http://127.0.0.1:8787/api/inject-telegram/direct', {
@@ -880,12 +1018,17 @@ async function injectTelegramEdited(reviewId, suggestionId, username) {
       username: username,
       searchAlias: review.contactName || username,
       text: editedText,
-      intent: review.intent
+      intent: review.intent,
+      productId: getReviewProductId(review)
     })
   });
   const result = await response.json();
   if (!result.ok) { alert('Erro: ' + result.error); return; }
-  try { await api('POST', '/api/reviews/' + reviewId + '/manual-sent', { suggestionId: suggestionId, text: editedText }); } catch(e) {}
+  try { await api('POST', '/api/reviews/' + reviewId + '/manual-sent', {
+    suggestionId: suggestionId,
+    text: editedText,
+    productId: getReviewProductId(review)
+  }); } catch(e) {}
   await new Promise(r => setTimeout(r, 4000));
   await loadReviews();
 }
@@ -1009,7 +1152,7 @@ function renderPendingSection(review, group) {
     for (var si = 0; si < review.suggestions.length; si++) {
       var s = review.suggestions[si];
       var validated = s.validated ? 'OK' : 'FALHOU';
-      var reminder = getSuggestionReminder(review.intent);
+      var reminder = getSuggestionReminder(review.intent, review);
       var score = typeof s.score === 'number' ? s.score : null;
       var scoreLabel = s.scoreLabel || 'teste';
       var scoreLabelText = scoreLabel === 'recomendada' ? 'Recomendada' : (scoreLabel === 'boa' ? 'Boa' : 'Teste');
@@ -1143,6 +1286,8 @@ function renderConversation(grouped, groupKey) {
       ' <span class="cli-count">' + info.total + ' mensagens</span>' +
       (info.latestManualStatus ? manualStatusTag(info.latestManualStatus) : '') +
     '</div></div>';
+
+  mainHtml += renderProductBadge(latestReview);
   var forceScrollClass = messages.length >= 2 ? ' force-scroll' : '';
   mainHtml += '<div class="chat-messages' + forceScrollClass + '" id="chatMessages">';
   for (var mi = 0; mi < messages.length; mi++) {
@@ -1208,20 +1353,29 @@ function selectGroup(key) {
 
 function renderReviews(reviews) {
   allReviews = Array.isArray(reviews) ? reviews : [];
-  renderFilterCounts(allReviews);
-  var filtered = filterReviews(allReviews);
+
+  renderReviewProductFilter(allReviews);
+
+  var productFilteredReviews = filterReviewsByProduct(allReviews);
+
+  renderFilterCounts(productFilteredReviews);
+
+  var filtered = filterReviews(productFilteredReviews);
   var grouped = groupReviews(filtered);
   allGroupedReviews = grouped;
-  if (!reviews || reviews.length === 0) {
-    document.getElementById('clientList').innerHTML = '<div class="empty-state"><div class="empty-icon">💬</div><div class="empty-text">Nenhum atendimento ainda</div><div class="empty-hint">Importe uma mensagem manualmente para começar.</div></div>';
-    document.getElementById('chatPanel').innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><div class="empty-icon">👈</div><div class="empty-text">Nenhum cliente selecionado</div><div class="empty-hint">Importe uma mensagem manualmente para começar.</div></div>';
+
+  if (!productFilteredReviews || productFilteredReviews.length === 0 || grouped.length === 0) {
+    document.getElementById('clientList').innerHTML = '<div class="empty-state"><div class="empty-icon">💬</div><div class="empty-text">Nenhum atendimento neste filtro</div><div class="empty-hint">Troque o produto ou selecione "Todos os produtos".</div></div>';
+    document.getElementById('chatPanel').innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><div class="empty-icon">👈</div><div class="empty-text">Nenhum cliente selecionado</div><div class="empty-hint">Escolha outro filtro para visualizar atendimentos.</div></div>';
     return;
   }
+
   if (!selectedGroupKey || !grouped.some(function(g) { return g[0] === selectedGroupKey; })) {
     var pendingGroup = grouped.find(function(g) { return g[1].some(function(r) { return r.status === 'pending_review'; }); });
     if (pendingGroup) { selectedGroupKey = pendingGroup[0]; }
     else if (grouped.length > 0) { selectedGroupKey = grouped[0][0]; }
   }
+
   renderClientList(grouped);
   renderConversation(grouped, selectedGroupKey);
 }
@@ -1269,8 +1423,13 @@ async function manualSent(reviewId, suggestionId) {
   msgEl.textContent = ''; msgEl.className = 'success-msg';
   var textarea = document.getElementById('edit-' + reviewId + '-' + suggestionId);
   var editedText = textarea ? textarea.value.trim() : '';
+  var review = await getReviewById(reviewId);
   try {
-    await api('POST', '/api/reviews/' + reviewId + '/manual-sent', { suggestionId: suggestionId, text: editedText || undefined });
+    await api('POST', '/api/reviews/' + reviewId + '/manual-sent', {
+      suggestionId: suggestionId,
+      text: editedText || undefined,
+      productId: getReviewProductId(review)
+    });
     msgEl.textContent = 'Marcado como enviado manualmente!';
     await loadReviews(); await loadStats();
   } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
@@ -1282,8 +1441,12 @@ async function registerManualReply(reviewId) {
   var msgEl = document.getElementById('msg-' + reviewId);
   if (msgEl) { msgEl.textContent = ''; msgEl.className = 'success-msg'; }
   if (!text) { alert('Escreva a resposta manual antes.'); return; }
+  var review = await getReviewById(reviewId);
   try {
-    await api('POST', '/api/reviews/' + reviewId + '/manual-text-sent', { text: text });
+    await api('POST', '/api/reviews/' + reviewId + '/manual-text-sent', {
+      text: text,
+      productId: getReviewProductId(review)
+    });
     if (msgEl) msgEl.textContent = 'Resposta manual registrada!';
     await loadReviews(); await loadStats();
   } catch (e) {
@@ -1295,16 +1458,25 @@ async function registerManualReply(reviewId) {
 async function injectManualReply(reviewId, phone) {
   var textarea = document.getElementById('manual-reply-' + reviewId);
   var text = textarea ? textarea.value.trim() : '';
+  const review = await getReviewById(reviewId);
   if (!text) { alert('Escreva a resposta manual antes.'); return; }
 
   const response = await fetch('http://127.0.0.1:8787/api/inject-whatsapp', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone: phone, text: text, intent: 'manual_reply' })
+    body: JSON.stringify({
+      phone: phone,
+      text: text,
+      intent: 'manual_reply',
+      productId: getReviewProductId(review)
+    })
   });
   const result = await response.json();
   if (!result.ok) { alert('Erro: ' + result.error); return; }
-  try { await api('POST', '/api/reviews/' + reviewId + '/manual-text-sent', { text: text }); } catch(e) {}
+  try { await api('POST', '/api/reviews/' + reviewId + '/manual-text-sent', {
+    text: text,
+    productId: getReviewProductId(review)
+  }); } catch(e) {}
   await new Promise(r => setTimeout(r, 4000));
   await loadReviews(); await loadStats();
 }
@@ -1314,8 +1486,7 @@ async function injectTelegramManualReply(reviewId, username) {
   var text = textarea ? textarea.value.trim() : '';
   if (!text) { alert('Escreva a resposta manual antes.'); return; }
 
-  const reviews = await api('GET', '/api/reviews');
-  const review = reviews.find(r => r.id === reviewId);
+  const review = await getReviewById(reviewId);
   const searchAlias = review ? (review.contactName || username) : username;
 
   const response = await fetch('http://127.0.0.1:8787/api/inject-telegram/direct', {
@@ -1325,12 +1496,16 @@ async function injectTelegramManualReply(reviewId, username) {
       username: username,
       searchAlias: searchAlias,
       text: text,
-      intent: 'manual_reply'
+      intent: 'manual_reply',
+      productId: getReviewProductId(review)
     })
   });
   const result = await response.json();
   if (!result.ok) { alert('Erro: ' + result.error); return; }
-  try { await api('POST', '/api/reviews/' + reviewId + '/manual-text-sent', { text: text }); } catch(e) {}
+  try { await api('POST', '/api/reviews/' + reviewId + '/manual-text-sent', {
+    text: text,
+    productId: getReviewProductId(review)
+  }); } catch(e) {}
   await new Promise(r => setTimeout(r, 4000));
   await loadReviews(); await loadStats();
 }
@@ -1359,10 +1534,49 @@ async function saveManualNote(reviewId) {
 
 async function loadReviews() {
   try {
-    var data = await api('GET', '/api/reviews');
+    if (isEditing) return;
+
+    var path = '/api/reviews';
+    if (reviewsDaysFilter && reviewsDaysFilter !== 'all') {
+      path += '?days=' + encodeURIComponent(reviewsDaysFilter);
+    }
+
+    var data = await api('GET', path);
+
+    if (isEditing) return;
+
     renderReviews(data);
   } catch (e) {
+    if (isEditing) return;
     document.getElementById('chatPanel').innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><div class="error-msg">Erro ao carregar: ' + e.message + '</div></div>';
+  }
+}
+
+async function setReviewsDaysFilter() {
+  var select = document.getElementById('reviewsDaysFilter');
+  reviewsDaysFilter = select ? select.value : '15';
+  await loadReviews();
+}
+
+async function archiveOldReviews() {
+  var select = document.getElementById('reviewsDaysFilter');
+  var days = select && select.value !== 'all' ? Number(select.value) : 15;
+  if (![7, 15, 30].includes(days)) days = 15;
+
+  if (!confirm('Arquivar atendimentos enviados/cancelados com mais de ' + days + ' dias? Pendentes nao serao arquivados. Um backup sera criado antes.')) {
+    return;
+  }
+
+  var msg = document.getElementById('archiveMsg');
+  if (msg) msg.textContent = 'Arquivando...';
+
+  try {
+    var result = await api('POST', '/api/reviews/archive-old', { days: days });
+    if (msg) msg.textContent = 'Arquivados: ' + result.archived + ' | Mantidos: ' + result.kept;
+    await loadReviews();
+    await loadStats();
+  } catch (e) {
+    if (msg) msg.textContent = 'Erro ao arquivar: ' + e.message;
   }
 }
 
@@ -1389,7 +1603,13 @@ async function importManualMessage() {
   errEl.textContent = '';
   if (!message) { errEl.textContent = 'A última mensagem é obrigatória.'; return; }
   try {
-    await api('POST', '/api/inbox/import', { source: 'manual', contactName: name || undefined, contactPhone: phone || undefined, lastMessage: message });
+    await api('POST', '/api/inbox/import', {
+      source: 'manual',
+      contactName: name || undefined,
+      contactPhone: phone || undefined,
+      lastMessage: message,
+      productId: activeProductId
+    });
     document.getElementById('importName').value = '';
     document.getElementById('importPhone').value = '';
     document.getElementById('importMessage').value = '';
@@ -1539,7 +1759,10 @@ async function continueFlow(encodedContactId) {
   var select = document.getElementById('flowStage-' + contactId);
   var stage = select ? select.value : 'followup';
   try {
-    await api('POST', '/api/contacts/' + encodedContactId + '/continue-flow', { stage: stage });
+    await api('POST', '/api/contacts/' + encodedContactId + '/continue-flow', {
+      stage: stage,
+      productId: activeProductId
+    });    
     await loadReviews();
   } catch (e) {
     alert('Erro: ' + e.message);
@@ -1548,7 +1771,9 @@ async function continueFlow(encodedContactId) {
 
 async function suggestNextFlow(encodedContactId) {
   try {
-    var result = await api('POST', '/api/contacts/' + encodedContactId + '/suggest-next-flow', {});
+    var result = await api('POST', '/api/contacts/' + encodedContactId + '/suggest-next-flow', {
+      productId: activeProductId
+    });    
     await loadReviews();
     if (result && result.stage) {
       alert('Etapa sugerida: ' + result.stage + '\nMotivo: ' + (result.reason || 'contexto da conversa'));
@@ -1743,6 +1968,8 @@ async function handleUseCredentials() {
 async function loadCommercial() {
   try {
     commercialState = await api('GET', '/api/commercial-settings');
+    productCatalogState = await api('GET', '/api/products');
+    activeProductId = productCatalogState.activeProductId || 'planner_estudante_pro';
     renderCommercial(commercialState);
   } catch (e) {
     console.error('[commercial] load error:', e);
@@ -1760,13 +1987,32 @@ async function loadCommercial() {
 
 function renderCommercial(state) {
   var container = document.getElementById('commercialContent');
+  var catalog = productCatalogState || { activeProductId: 'planner_estudante_pro', products: {} };
+  var products = Object.values(catalog.products || {});
+  var activeId = catalog.activeProductId || 'planner_estudante_pro';
+  var productOptions = products.map(function(p) {
+    return '<option value="' + escapeHtml(p.id) + '"' + (p.id === activeId ? ' selected' : '') + '>' + escapeHtml(p.name) + ' (' + escapeHtml(p.id) + ')</option>';
+  }).join('');
+  var activeProduct = (catalog.products || {})[activeId] || null;
+  var productSelectorHtml = '' +
+    '<div style="margin-bottom:10px;padding:10px;border:1px solid #9ed0ff;border-radius:6px;background:#eaf6ff;">' +
+      '<div style="font-weight:700;color:#075985;margin-bottom:6px;">Produto ativo</div>' +
+      '<select id="activeProductSelect" onchange="selectActiveProduct()" style="width:100%;padding:7px;margin-top:2px;border:1px solid #7cc4f8;border-radius:4px;background:white;">' +
+        productOptions +
+      '</select>' +
+      '<div style="font-size:0.78rem;color:#075985;margin-top:5px;">' +
+        'As novas mensagens, sugestoes e historicos vao usar: <strong>' + escapeHtml(activeProduct ? activeProduct.name : activeId) + '</strong>' +
+      '</div>' +
+    '</div>';
   console.log('[commercial] state:', state);
   try {
     state = state || { hasSettings: false };
     if (!state.hasSettings || showCommercialForm) {
       container.innerHTML = '' +
         '<div style="margin-bottom:6px;font-size:0.82rem;color:#666;">Configure o produto que o bot vai vender.</div>' +
+         productSelectorHtml +
         '<div style="margin-bottom:5px;"><label>Nome do produto</label><input type="text" id="comProductName" placeholder="Planner Estudante Pro" value="' + escapeHtml(state.settings?.productName || '') + '"></div>' +
+        '<div style="margin-bottom:5px;"><label>ID do produto</label><input type="text" id="comProductId" placeholder="planner_estudante_pro" value="' + escapeHtml(activeId || '') + '"></div>' +
         '<div style="margin-bottom:5px;"><label>Preço</label><input type="text" id="comPrice" placeholder="R$ 47,00" value="' + escapeHtml(state.settings?.price || '') + '"></div>' +
         '<div style="margin-bottom:5px;"><label>Link de checkout</label><input type="text" id="comCheckoutUrl" placeholder="https://checkout.eduzz.com/..." value="' + escapeHtml(state.settings?.checkoutUrl || '') + '"></div>' +
         '<div style="margin:8px 0 5px;padding:8px;background:#f8f9fa;border-radius:6px;"><strong>Checkout recuperação opcional</strong><div style="font-size:0.75rem;color:#666;">Use somente para lead parado ou objeção de preço.</div></div>' +
@@ -1810,6 +2056,7 @@ function renderCommercial(state) {
       '</div>'
     ) : '';
     container.innerHTML = '' +
+      productSelectorHtml +
       '<div style="font-size:0.82rem;margin-bottom:6px;">' +
         '<div><strong>Produto:</strong> ' + escapeHtml(s.productName || '-') + '</div>' +
         '<div><strong>Preço:</strong> ' + escapeHtml(s.price || '-') + '</div>' +
@@ -1849,6 +2096,7 @@ function cancelCommercialForm() { showCommercialForm = false; renderCommercial(c
 
 async function handleSaveCommercial() {
   var productName = document.getElementById('comProductName').value.trim();
+  var productId = document.getElementById('comProductId') ? document.getElementById('comProductId').value.trim() : '';
   var price = document.getElementById('comPrice').value.trim();
   var checkoutUrl = document.getElementById('comCheckoutUrl').value.trim();
   var recoveryPrice = document.getElementById('comRecoveryPrice').value.trim();
@@ -1860,10 +2108,38 @@ async function handleSaveCommercial() {
   if (!productName || !price) { msgEl.className = 'error-msg'; msgEl.textContent = 'Nome do produto e preço são obrigatórios.'; return; }
   try {
     var result = await api('POST', '/api/commercial-settings/save', { productName: productName, price: price, checkoutUrl: checkoutUrl, deliveryMethod: deliveryMethod, recoveryPrice: recoveryPrice, recoveryCheckoutUrl: recoveryCheckoutUrl, productDescription: productDescription });
+    await api('POST', '/api/products/save', {
+      id: productId || productName,
+      name: productName,
+      price: price,
+      checkoutUrl: checkoutUrl,
+      deliveryMethod: deliveryMethod,
+      productDescription: productDescription,
+      recoveryPrice: recoveryPrice,
+      recoveryCheckoutUrl: recoveryCheckoutUrl
+    });
+    productCatalogState = await api('GET', '/api/products');
+    activeProductId = productCatalogState.activeProductId || 'planner_estudante_pro';
+
     commercialState = { hasSettings: true, settings: result.settings };
     showCommercialForm = false; renderCommercial(commercialState);
     msgEl.textContent = 'Configurações salvas!';
   } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
+}
+
+async function selectActiveProduct() {
+  var select = document.getElementById('activeProductSelect');
+  if (!select) return;
+
+  try {
+    var result = await api('POST', '/api/products/select', { productId: select.value });
+    productCatalogState = result.catalog;
+    activeProductId = result.activeProductId;
+    await loadCommercial();
+    await loadReviews();
+  } catch (e) {
+    alert('Erro ao selecionar produto: ' + e.message);
+  }
 }
 
 async function handleValidateCheckout() {
@@ -2068,7 +2344,14 @@ async function prepareCampaign() {
   var allowResendForTest = document.getElementById('campaignAllowResendForTest').checked === true;
   if (messages.length === 0) { msgEl.className = 'error-msg'; msgEl.textContent = 'Digite pelo menos uma mensagem inicial.'; return; }
   try {
-    campaignState = await api('POST', '/api/campaign/prepare', { messages, limit, minDelaySeconds, maxDelaySeconds, allowResendForTest });
+    campaignState = await api('POST', '/api/campaign/prepare', {
+      messages: messages,
+      limit: limit,
+      minDelaySeconds: minDelaySeconds,
+      maxDelaySeconds: maxDelaySeconds,
+      allowResendForTest: allowResendForTest,
+      productId: activeProductId
+    });
     msgEl.textContent = 'Campanha preparada. Revise e clique em Iniciar envio.';
     renderCampaign(campaignState);
   } catch (e) { msgEl.className = 'error-msg'; msgEl.textContent = 'Erro: ' + e.message; }
@@ -2145,7 +2428,11 @@ async function loadWaiting() {
 }
 
 async function createFollowup(phone, lastMessage) {
-  await api('POST', '/api/waiting-reply/create-followup', { phone, lastMessage });
+  await api('POST', '/api/waiting-reply/create-followup', {
+    phone: phone,
+    lastMessage: lastMessage,
+    productId: activeProductId
+  });
   alert('Card de follow-up criado! Veja na aba principal.');
 }
 

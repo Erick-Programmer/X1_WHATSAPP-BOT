@@ -1,8 +1,10 @@
 import * as fs from "fs";
 import * as path from "path";
+import { DEFAULT_PRODUCT_ID, normalizeProductId } from "./productContext";
 
 export interface InitialMessageHistoryEntry {
   phone: string;
+  productId: string;
   text: string;
   sentAt: string;
   campaignItemId?: string;
@@ -33,22 +35,31 @@ class InitialMessageHistory {
     }
   }
 
-  hasSent(phone: string): boolean {
+  hasSent(phone: string, productId: string = DEFAULT_PRODUCT_ID): boolean {
     const normalized = normalizePhone(phone);
+    const normalizedProductId = normalizeProductId(productId);
     if (!normalized) return false;
-    return this.load().some((entry) => normalizePhone(entry.phone) === normalized);
+    return this.load().some((entry) =>
+      normalizePhone(entry.phone) === normalized &&
+      normalizeProductId(entry.productId) === normalizedProductId
+    );
   }
 
-  recordSent(options: { phone: string; text: string; campaignItemId?: string }): InitialMessageHistoryEntry | null {
+  recordSent(options: { phone: string; productId?: string; text: string; campaignItemId?: string }): InitialMessageHistoryEntry | null {
     const phone = normalizePhone(options.phone);
+    const productId = normalizeProductId(options.productId);
     if (!phone) return null;
 
     const entries = this.load();
-    const existing = entries.find((entry) => normalizePhone(entry.phone) === phone);
+    const existing = entries.find((entry) =>
+      normalizePhone(entry.phone) === phone &&
+      normalizeProductId(entry.productId) === productId
+    );
     if (existing) return existing;
 
     const entry: InitialMessageHistoryEntry = {
       phone,
+      productId,
       text: options.text,
       campaignItemId: options.campaignItemId,
       sentAt: new Date().toISOString(),

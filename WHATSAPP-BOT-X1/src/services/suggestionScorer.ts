@@ -1,10 +1,12 @@
 import * as fs from "fs";
 import * as path from "path";
 import { ReviewItem, ReplySuggestion } from "../types/copilot";
+import { normalizeProductId } from "./productContext";
 
 type ScoreLabel = "recomendada" | "boa" | "teste";
 
 interface TextExample {
+  productId?: string;
   intent?: string;
   text: string;
   sale?: boolean;
@@ -76,10 +78,12 @@ function readEventExamples(): TextExample[] {
       const event = ev.event as string;
       const reviewId = ev.reviewId as string | undefined;
       const text = ev.suggestionText as string | undefined;
+      const productId = normalizeProductId(ev.productId as string | undefined);
       if (!reviewId || !text) continue;
 
       if (event === "suggestion_sent" || event === "manual_suggestion_sent") {
         sentByReview.set(reviewId, {
+          productId,
           intent: ev.intent as string | undefined,
           text,
           sale: false,
@@ -89,6 +93,7 @@ function readEventExamples(): TextExample[] {
       if (event === "sale_outcome" && ev.sale === true) {
         const sent = sentByReview.get(reviewId);
         examples.push({
+          productId: productId || sent?.productId,
           intent: (ev.intent as string | undefined) || sent?.intent,
           text: text || sent?.text || "",
           sale: true,
@@ -105,6 +110,7 @@ function readEventExamples(): TextExample[] {
 function readApprovedExamples(): TextExample[] {
   return readJsonArray(APPROVED_FILE)
     .map((item) => ({
+      productId: normalizeProductId(item.productId as string | undefined),
       intent: item.intent as string | undefined,
       text: item.text as string,
       sale: false,
@@ -128,6 +134,11 @@ function hasCheckout(text: string): boolean {
 
 function wordCount(text: string): number {
   return normalizeText(text).split(" ").filter(Boolean).length;
+}
+
+function filterExamplesForReview(examples: TextExample[], review: ReviewItem): TextExample[] {
+  const productId = normalizeProductId(review.productId);
+  return examples.filter((example) => normalizeProductId(example.productId) === productId);
 }
 
 function scoreOne(review: ReviewItem, suggestion: ReplySuggestion, sales: TextExample[], approved: TextExample[]): ScoreResult {
@@ -196,9 +207,12 @@ function scoreOne(review: ReviewItem, suggestion: ReplySuggestion, sales: TextEx
 }
 
 export function scoreReviewSuggestions(review: ReviewItem, sales: TextExample[], approved: TextExample[]): ReviewItem {
+  const productSales = filterExamplesForReview(sales, review);
+  const productApproved = filterExamplesForReview(approved, review);
+
   const scoredSuggestions = review.suggestions.map((suggestion) => ({
     ...suggestion,
-    ...scoreOne(review, suggestion, sales, approved),
+    ...scoreOne(review, suggestion, productSales, productApproved),
   }));
 
   const bestScore = Math.max(...scoredSuggestions.map((suggestion) => suggestion.score ?? 0));

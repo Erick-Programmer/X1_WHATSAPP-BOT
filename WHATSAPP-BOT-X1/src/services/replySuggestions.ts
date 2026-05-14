@@ -5,6 +5,8 @@ import { productKnowledge } from "../config/product";
 import { validateResponse } from "./qaValidator";
 import { generateSuggestionsDeepSeek } from "./deepseekSuggestions";
 import { commercialSettings } from "./commercialSettings";
+import { DEFAULT_PRODUCT_ID, normalizeProductId } from "./productContext";
+import { getProductProfile } from "./productProfile";
 
 function pick(arr: string[], index: number = 0): string {
   return arr[index % arr.length];
@@ -205,13 +207,62 @@ function buildSuggestion(intent: Intent, type: SuggestionType, round: number = 1
   }
 }
 
+function buildGenericProductSuggestion(
+  intent: Intent,
+  type: SuggestionType,
+  round: number = 1,
+  productId: string = DEFAULT_PRODUCT_ID
+): string {
+  const profile = getProductProfile(productId);
+  const name = profile.name;
+  const price = profile.price;
+  const includes = profile.includes.join(", ");
+  const delivery = profile.delivery;
+
+  switch (intent) {
+    case Intent.AskPrice:
+      if (type === "direct") return `O valor fica ${price}.`;
+      if (type === "explanatory") return `O valor fica ${price}. Voce recebe ${includes}.`;
+      return `Fica ${price}. Se fizer sentido pra voce, posso te mandar o link.`;
+
+    case Intent.AskContent:
+      if (type === "direct") return `O ${name} vem com ${includes}.`;
+      if (type === "explanatory") return `O ${name} inclui ${includes}. A entrega funciona assim: ${delivery}.`;
+      return `Ele vem com ${includes}. Posso te explicar rapidinho como funciona.`;
+
+    case Intent.AskDelivery:
+      if (type === "direct") return `A entrega e: ${delivery}.`;
+      if (type === "explanatory") return `Depois da compra, voce recebe o acesso conforme combinado: ${delivery}.`;
+      return `E bem simples: depois da compra, voce recebe tudo por ${delivery}.`;
+
+    case Intent.PositiveConfirmation:
+      if (type === "direct") return `Perfeito, vou te mostrar o ${name} rapidinho.`;
+      if (type === "explanatory") return `Perfeito. O ${name} e um produto pensado para ajudar com: ${profile.description}`;
+      return `Boa! Vou te explicar rapidinho o que vem e como funciona.`;
+
+    case Intent.BuyIntent:
+      if (type === "direct") return `Perfeito. O valor e ${price}. Quer que eu mande o link?`;
+      if (type === "explanatory") return `Perfeito. O ${name} fica ${price} e a entrega e ${delivery}. Quer que eu te mande o link?`;
+      return `Fechado. Posso te mandar o link agora pra voce ver certinho.`;
+
+    case Intent.StopContact:
+      return `Sem problemas. Obrigado por avisar.`;
+
+    default:
+      if (type === "direct") return `Pode me perguntar sobre valor, entrega ou como funciona.`;
+      if (type === "explanatory") return `O ${name} funciona assim: ${profile.description}. Se quiser, explico valor, entrega ou acesso.`;
+      return `Me fala sua duvida que eu te explico direitinho.`;
+  }
+}
+
 export async function generateSuggestions(
   intent: Intent,
   round: number = 1,
-  history: string[] = []
+  history: string[] = [],
+  productId: string = DEFAULT_PRODUCT_ID
 ): Promise<ReplySuggestion[]> {
   // Tenta DeepSeek primeiro
-  const aiSuggestions = await generateSuggestionsDeepSeek(intent, history, round);
+  const aiSuggestions = await generateSuggestionsDeepSeek(intent, history, round, productId);
   if (aiSuggestions && aiSuggestions.length === 3) {
     return aiSuggestions;
   }
@@ -219,7 +270,9 @@ export async function generateSuggestions(
   // Fallback: sugestões estáticas
   const types: SuggestionType[] = ["direct", "explanatory", "human"];
   return types.map((type) => {
-    const text = buildSuggestion(intent, type, round);
+    const text = normalizeProductId(productId) === DEFAULT_PRODUCT_ID
+      ? buildSuggestion(intent, type, round)
+      : buildGenericProductSuggestion(intent, type, round, productId);
     const response = [{ type: "text" as const, content: text }];
     const validation = validateResponse(response);
     return {
@@ -274,12 +327,103 @@ export function generateRecoverySuggestions(round: number = 1): ReplySuggestion[
   });
 }
 
+function generateGenericFlowContinuationSuggestions(
+  stage: string = "followup",
+  round: number = 1,
+  productId: string = DEFAULT_PRODUCT_ID
+): ReplySuggestion[] {
+  const profile = getProductProfile(productId);
+  const price = profile.price;
+  const checkout = profile.checkoutUrl;
+  const name = profile.name;
+  const description = profile.description;
+  const delivery = profile.delivery;
+  const includes = profile.includes.join(", ");
+
+  const templates: Record<string, string[][]> = {
+    presentation: [
+      [
+        `Posso te mostrar rapidinho como funciona o ${name}?`,
+        `O ${name} foi pensado para ajudar com isso: ${description}. Quer que eu te mostre?`,
+        `Se quiser, te explico em poucas mensagens o que vem e como funciona o acesso.`,
+      ],
+    ],
+    product: [
+      [
+        `O ${name} inclui ${includes}.`,
+        `Ele funciona assim: ${description}. A entrega e ${delivery}.`,
+        `Voce recebe ${includes}. Posso te explicar melhor se quiser.`,
+      ],
+    ],
+    price: [
+      [
+        checkout
+          ? `O valor fica ${price}. Se quiser finalizar, pode acessar por aqui: ${checkout}`
+          : `O valor fica ${price}. Se quiser, te explico o proximo passo.`,
+        checkout
+          ? `O ${name} fica ${price}. Aqui esta o link para finalizar: ${checkout}`
+          : `O ${name} fica ${price}. Posso te passar o proximo passo.`,
+        checkout
+          ? `Fica ${price}. Se fizer sentido para voce, pode finalizar por aqui: ${checkout}`
+          : `Fica ${price}. Se fizer sentido para voce, me fala que te explico como acessar.`,
+      ],
+    ],
+    followup: [
+      [
+        `Conseguiu ver direitinho? Se tiver alguma duvida sobre o ${name}, pode perguntar.`,
+        `Passando so para saber se ficou alguma duvida sobre como funciona ou como recebe.`,
+        `Fiquei por aqui caso queira tirar alguma duvida antes de decidir.`,
+      ],
+    ],
+    close: [
+      [
+        checkout
+          ? `Quer que eu te mande o link para finalizar agora? O valor fica ${price}.`
+          : `Quer que eu te passe o proximo passo para acessar? O valor fica ${price}.`,
+        checkout
+          ? `Se fizer sentido para voce, posso te mandar o checkout agora. Fica ${price}.`
+          : `Se fizer sentido para voce, te explico como acessar. Fica ${price}.`,
+        checkout
+          ? `Quer garantir o acesso? Posso te passar o link agora.`
+          : `Quer garantir o acesso? Posso te passar as informacoes agora.`,
+      ],
+    ],
+    recovery: [
+      [
+        `Se ainda fizer sentido para voce, posso te explicar de novo como funciona o ${name}.`,
+        `Pra facilitar sua decisao, posso tirar qualquer duvida sobre entrega, acesso ou valor.`,
+        `Se ainda tiver interesse, me fala que eu te ajudo com o proximo passo.`,
+      ],
+    ],
+  };
+
+  const normalizedStage = templates[stage] ? stage : "followup";
+  const selected = templates[normalizedStage][(Math.max(round, 1) - 1) % templates[normalizedStage].length];
+  const types: SuggestionType[] = ["direct", "explanatory", "human"];
+
+  return selected.map((text, index) => {
+    const response = [{ type: "text" as const, content: text }];
+    const validation = validateResponse(response);
+    return {
+      id: crypto.randomUUID(),
+      type: types[index],
+      text,
+      validated: validation.approved,
+      createdAt: new Date(),
+    };
+  });
+}
+
 export function generateFlowContinuationSuggestions(
   stage: string = "auto",
-  round: number = 1
+  round: number = 1,
+  productId: string = DEFAULT_PRODUCT_ID
 ): ReplySuggestion[] {
   const config = commercialSettings.getEffectiveConfig();
   const recoveryConfig = commercialSettings.getRecoveryConfig();
+  if (normalizeProductId(productId) !== DEFAULT_PRODUCT_ID) {
+    return generateGenericFlowContinuationSuggestions(stage, round, productId);
+  }
   const price = config.price;
   const checkout = config.isCheckoutConfigured ? config.checkoutUrl : "";
   const recoveryPrice = recoveryConfig.price;
@@ -367,33 +511,55 @@ export function generateFlowContinuationSuggestions(
 export async function generateFlowContinuationSuggestionsSmart(
   stage: string = "followup",
   history: string[] = [],
-  round: number = 1
+  round: number = 1,
+  productId: string = DEFAULT_PRODUCT_ID
 ): Promise<ReplySuggestion[]> {
+  const profile = getProductProfile(productId);
   const recoveryConfig = commercialSettings.getRecoveryConfig();
+
+  const productName = profile.name;
+  const productDescription = profile.description;
+  const productPrice = profile.price;
+  const productDelivery = profile.delivery;
+  const productIncludes = profile.includes.join(", ");
+  const isDefaultProduct = normalizeProductId(productId) === DEFAULT_PRODUCT_ID;
+
   const stagePromptMap: Record<string, string> = {
-    presentation: "Continue a venda apresentando o Planner Estudante Pro de forma natural e curta.",
-    product: "Continue a venda mostrando o que vem no pacote: 10 planners digitais e 3 ebooks bonus.",
-    price: "Continue a venda falando o valor normal e o checkout, sem oferecer recuperacao nem desconto.",
-    close: "Continue a venda pedindo fechamento de forma leve, humana e objetiva.",
-    followup: "Continue a conversa com um follow-up natural para tirar duvida e retomar interesse.",
-    recovery: "Continue a venda com uma recuperacao suave. Se o cliente ja recebeu valor e sumiu, ofereca uma condicao menor sem parecer pressao.",
+    presentation: `Continue a venda apresentando o produto atual de forma natural e curta: ${productName}.`,
+    product: `Continue a venda mostrando o que vem no produto atual. Use apenas estas informacoes: ${productDescription}. Inclui: ${productIncludes}. Entrega: ${productDelivery}.`,
+    price: `Continue a venda falando o valor do produto atual com suavidade. Valor: ${productPrice}. Nao invente desconto.`,
+    close: `Continue a venda pedindo fechamento de forma leve, humana e objetiva para o produto atual: ${productName}.`,
+    followup: `Continue a conversa com um follow-up natural para tirar duvida e retomar interesse sobre o produto atual: ${productName}.`,
+    recovery: isDefaultProduct
+      ? "Continue a venda com uma recuperacao suave. Se o cliente ja recebeu valor e sumiu, ofereca a condicao de recuperacao configurada sem parecer pressao."
+      : `Continue a venda com uma recuperacao suave sobre o produto atual: ${productName}. Nao invente desconto. Retome valor, beneficio e tire duvidas.`,
   };
+
   const stagePrompt = stagePromptMap[stage] || stagePromptMap.followup;
+
+  const recoveryLine =
+    stage === "recovery" && isDefaultProduct && recoveryConfig.isCheckoutConfigured
+      ? `Condicao de recuperacao configurada: ${recoveryConfig.price}. Link: ${recoveryConfig.checkoutUrl}`
+      : "";
+
   const aiHistory = [
     ...history.slice(-6),
+    `Produto atual: ${productName}`,
+    `Descricao do produto atual: ${productDescription}`,
+    `Valor do produto atual: ${productPrice}`,
+    `Entrega do produto atual: ${productDelivery}`,
     `Tarefa do vendedor: ${stagePrompt}`,
-    stage === "recovery" && recoveryConfig.isCheckoutConfigured
-      ? `Condicao de recuperacao configurada: ${recoveryConfig.price}. Link: ${recoveryConfig.checkoutUrl}`
-      : "",
-    stage === "recovery"
+    recoveryLine,
+    stage === "recovery" && isDefaultProduct && recoveryConfig.isCheckoutConfigured
       ? "Gere 3 opcoes curtas, humanas e prontas para WhatsApp. Use apenas a condicao de recuperacao configurada, sem inventar outros descontos. Nao fale em equipe ou suporte."
-      : "Gere 3 opcoes curtas, humanas e prontas para WhatsApp. Nao invente desconto. Nao fale em equipe ou suporte.",
-  ];
+      : "Gere 3 opcoes curtas, humanas e prontas para WhatsApp. Use somente informacoes do produto atual. Nao invente desconto. Nao fale em equipe ou suporte.",
+  ].filter(Boolean);
 
-  const aiSuggestions = await generateSuggestionsDeepSeek(Intent.Unknown, aiHistory, round);
+  const aiSuggestions = await generateSuggestionsDeepSeek(Intent.Unknown, aiHistory, round, productId);
   if (aiSuggestions && aiSuggestions.length === 3) {
     return aiSuggestions;
   }
 
-  return generateFlowContinuationSuggestions(stage, round);
+  return generateFlowContinuationSuggestions(stage, round, productId);
 }
+

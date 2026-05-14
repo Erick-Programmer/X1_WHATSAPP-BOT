@@ -1,52 +1,48 @@
 import { Intent } from "../types/intent";
 import { ReplySuggestion, SuggestionType } from "../types/copilot";
-import { productKnowledge } from "../config/product";
-import { commercialSettings } from "./commercialSettings";
+import { getProductProfile, productProfileText } from "./productProfile";
 import { validateResponse } from "./qaValidator";
 import * as fs from "fs";
 import * as path from "path";
+import { DEFAULT_PRODUCT_ID, normalizeProductId } from "./productContext";
 
 const APPROVED_FILE = path.resolve(process.cwd(), "data", "approved-responses.json");
 
-function getApprovedExamples(intent: Intent): string[] {
+const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
+
+function getApprovedExamples(intent: Intent, productId: string = DEFAULT_PRODUCT_ID): string[] {
   if (!fs.existsSync(APPROVED_FILE)) return [];
   try {
     const list: Array<{ intent: string; text: string }> = JSON.parse(fs.readFileSync(APPROVED_FILE, "utf-8"));
     return list
-      .filter(e => e.intent === intent)
+      .filter(e => e.intent === intent && normalizeProductId((e as any).productId) === normalizeProductId(productId))
       .slice(-3)
       .map(e => e.text);
   } catch { return []; }
 }
 
-const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
+function buildSystemPrompt(productId: string = DEFAULT_PRODUCT_ID): string {
+  const profile = getProductProfile(productId);
 
-function buildSystemPrompt(): string {
-  const pk = productKnowledge;
-  const settings = commercialSettings.getEffectiveConfig();
-  const price = settings.price;
-  const planners = pk.planners.map(p => `${p.name} (${p.style})`).join(", ");
-  const ebooks = pk.ebooks.map(e => e.name).join(", ");
-  const description = commercialSettings.load()?.productDescription || "";
+  return `Voce e um vendedor humano brasileiro vendendo pelo WhatsApp. Responda de forma natural, direta e sem formalidade excessiva. Nunca use travessao. Use linguagem do dia a dia.
 
-  return `Você é um vendedor humano brasileiro vendendo pelo WhatsApp. Responda de forma natural, direta e sem formalidade excessiva. Nunca use travessão (—). Use linguagem do dia a dia.
-
-PRODUTO: ${pk.name}
-PREÇO: ${price}
-${description ? `DESCRIÇÃO ATUAL DO PRODUTO: ${description}` : `O QUE VEM: 10 planners digitais em PDF (${planners}) + 3 ebooks bônus (${ebooks})`}
-CONTEÚDO DE CADA PLANNER: calendário mensal, planejamento semanal, metas, hábitos, controle de provas
-ENTREGA: digital por e-mail após a compra, tudo em PDF
+PRODUTO ATUAL:
+${productProfileText(productId)}
 
 REGRAS:
-- Nunca invente informações sobre o produto
-- Nunca use travessão (—)
+- Use somente informacoes do PRODUTO ATUAL
+- Nunca use nome, preco, bonus, entrega ou detalhes de outro produto
+- Nunca invente informacoes sobre o produto
+- Nunca use travessao
 - Seja humano, curto e direto
-- Não comece frases com "Olá!" ou "Claro!" toda hora
-- Não use emojis em excesso`;
+- Nao comece frases com "Ola!" ou "Claro!" toda hora
+- Nao use emojis em excesso
+- Se nao souber algo, responda de forma simples e peca permissao para explicar melhor
+- Se for checkout, use somente este link quando fizer sentido: ${profile.checkoutUrl}`;
 }
 
-function buildUserPrompt(intent: Intent, history: string[]): string {
-  const settings = commercialSettings.getEffectiveConfig();
+function buildUserPrompt(intent: Intent, history: string[], productId: string = DEFAULT_PRODUCT_ID): string {
+  const profile = getProductProfile(productId);
 
   const intentLabels: Record<Intent, string> = {
     [Intent.AskPrice]: "cliente perguntou o preço",
@@ -67,7 +63,7 @@ function buildUserPrompt(intent: Intent, history: string[]): string {
     : "Primeira mensagem do cliente.";
 
   const extraInstruction = intent === Intent.BuyIntent
-    ? `\nATENÇÃO: o cliente quer comprar. NÃO justifique o preço. Mande o link direto: ${settings.checkoutUrl}`
+    ? `\nATENCAO: o cliente quer comprar. NAO justifique o preco. Mande o link direto se fizer sentido: ${profile.checkoutUrl}`
     : intent === Intent.ObjectionExpensive
     ? `\nATENÇÃO: não use frases como "vale muito a pena" ou "ótimo custo-benefício". Seja empático e mostre o conteúdo.`
     : "";
@@ -76,14 +72,15 @@ function buildUserPrompt(intent: Intent, history: string[]): string {
     "FLUXO DE VENDA:",
     "- A resposta precisa fazer sentido com a mensagem mais recente e com a etapa do cliente.",
     "- Se a pessoa so cumprimentou, responda o cumprimento e peca permissao para mostrar.",
-    "- Se a pessoa respondeu sim ou pode sim logo depois da abordagem inicial, apresente o kit sem preco e sem checkout.",
+    "- Se a pessoa respondeu sim ou pode sim logo depois da abordagem inicial, apresente o produto atual sem preco e sem checkout.",
     "- Se a pessoa ja recebeu a apresentacao e respondeu algo como ah sim, avance suavemente para valor ou pergunta de link.",
     "- Se a pessoa perguntou preco, informe o valor e pergunte se pode mandar o link.",
     "- Nao pule para preco ou checkout antes do cliente pedir valor ou demonstrar compra.",
+    "- Use somente informacoes do produto atual. Nao copie nome, preco, bonus, entrega ou detalhes de outro produto.",
   ].join("\n");
 
   // Few-shot: exemplos aprovados pelo vendedor
-  const approved = getApprovedExamples(intent);
+  const approved = getApprovedExamples(intent, productId);
   const fewShotBlock = approved.length > 0
     ? `\nRespostas que o vendedor já aprovou para essa situação:\n${approved.map(t => `- "${t}"`).join("\n")}\nImite o estilo dessas respostas.\n`
     : "";
@@ -103,10 +100,22 @@ ${flowRules}
 }`;
 }
 
+function hasCrossProductLeak(text: string, productId: string): boolean {
+  if (normalizeProductId(productId) === DEFAULT_PRODUCT_ID) return false;
+
+  const lower = text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  return /planner|planners|ebook|ebooks|kit digital|produto-planners|produto-completo|cyber focus|candy dream|deep tech|lavender|3 ebooks|10 planners/.test(lower);
+}
+
 export async function generateSuggestionsDeepSeek(
   intent: Intent,
   history: string[],
-  round: number = 1
+  round: number = 1,
+  productId: string = DEFAULT_PRODUCT_ID
 ): Promise<ReplySuggestion[] | null> {
   const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "";
   if (!DEEPSEEK_API_KEY) return null;
@@ -123,8 +132,8 @@ export async function generateSuggestionsDeepSeek(
         max_tokens: 600,
         temperature: 0.7,
         messages: [
-          { role: "system", content: buildSystemPrompt() },
-          { role: "user", content: buildUserPrompt(intent, history) },
+          { role: "system", content: buildSystemPrompt(productId) },
+          { role: "user", content: buildUserPrompt(intent, history, productId) },
         ],
       }),
     });
@@ -140,7 +149,7 @@ export async function generateSuggestionsDeepSeek(
 
     const types: SuggestionType[] = ["direct", "explanatory", "human"];
 
-    return types.map((type) => {
+    const suggestions = types.map((type) => {
       const text = parsed[type] || "";
       const validation = validateResponse([{ type: "text", content: text }]);
       return {
@@ -151,6 +160,16 @@ export async function generateSuggestionsDeepSeek(
         createdAt: new Date(),
       };
     });
+
+    if (suggestions.some((suggestion) => hasCrossProductLeak(suggestion.text, productId))) {
+      console.warn("[DeepSeek] Sugestao descartada por vazamento de outro produto:", {
+        productId,
+        texts: suggestions.map((s) => s.text),
+      });
+      return null;
+    }
+
+    return suggestions;
 
   } catch (e) {
     console.error("[DeepSeek] Erro ao gerar sugestões:", e);

@@ -30,6 +30,7 @@ export interface SaleOutcome {
 export interface ReviewItem {
   id: string;
   contactId: string;
+  productId?: string;
   messageId: string;
   customerMessage: string;
   intent: Intent;

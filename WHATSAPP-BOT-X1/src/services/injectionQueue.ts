@@ -18,6 +18,7 @@ export interface InjectionTask {
   failedAt?: string;
   error?: string;
   campaignItemId?: string;
+  productId?: string;
 }
 
 function getPath(): string {
@@ -62,6 +63,7 @@ class InjectionQueue {
     source: InjectionTaskSource;
     intent?: string;
     campaignItemId?: string;
+    productId?: string;
   }): InjectionTask {
     const now = new Date().toISOString();
     const tasks = load();
@@ -72,6 +74,7 @@ class InjectionQueue {
       source: task.source,
       intent: task.intent,
       campaignItemId: task.campaignItemId,
+      productId: task.productId,
       status: "queued",
       createdAt: now,
       updatedAt: now,

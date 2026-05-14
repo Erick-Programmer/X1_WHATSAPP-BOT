@@ -12,6 +12,7 @@ import {
   logManualSuggestionSent,
 } from "./eventLogger";
 import { loadReviews, saveReviews } from "./reviewStore";
+import { DEFAULT_PRODUCT_ID, normalizeProductId } from "./productContext";
 
 /**
  * In-memory review queue for the copilot mode.
@@ -47,12 +48,14 @@ class ReviewQueue {
     messageId: string,
     customerMessage: string,
     intent: Intent,
-    suggestions: ReplySuggestion[]
+    suggestions: ReplySuggestion[],
+    options?: { productId?: string }
   ): ReviewItem {
     const now = new Date();
     const item: ReviewItem = {
       id: crypto.randomUUID(),
       contactId,
+      productId: normalizeProductId(options?.productId || DEFAULT_PRODUCT_ID),
       messageId,
       customerMessage,
       intent,
@@ -104,13 +107,13 @@ class ReviewQueue {
    */
   updateReviewMetadata(
     reviewId: string,
-    metadata: Partial<Pick<ReviewItem, "contactName" | "contactPhone" | "contactUsername" | "channel" | "source" | "receivedAt">>
+    metadata: Partial<Pick<ReviewItem, "contactName" | "contactPhone" | "contactUsername" | "channel" | "source" | "receivedAt" | "productId">>
   ): ReviewItem {
     const item = this.items.get(reviewId);
     if (!item) {
       throw new Error(`Review item ${reviewId} not found`);
     }
-
+    if ("productId" in metadata) item.productId = normalizeProductId(metadata.productId);
     if ("contactName" in metadata) item.contactName = metadata.contactName;
     if ("contactPhone" in metadata) item.contactPhone = metadata.contactPhone;
     if ("contactUsername" in metadata) item.contactUsername = metadata.contactUsername;
