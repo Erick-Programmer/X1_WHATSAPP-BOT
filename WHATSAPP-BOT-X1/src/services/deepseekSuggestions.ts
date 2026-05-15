@@ -24,10 +24,40 @@ function getApprovedExamples(intent: Intent, productId: string = DEFAULT_PRODUCT
 function buildSystemPrompt(productId: string = DEFAULT_PRODUCT_ID): string {
   const profile = getProductProfile(productId);
 
+  const copyToneRules =
+    profile.copyTone === "direct"
+      ? `
+ESTILO DE COPY:
+Direto e persuasivo.
+- Seja mais claro no convite para agir.
+- Use urgencia leve quando fizer sentido.
+- Reforce oportunidade, praticidade e economia de tempo.
+- Pode pedir o proximo passo com mais firmeza.
+- Nao seja agressivo de verdade, nao pressione, nao prometa resultado garantido.
+`
+      : profile.copyTone === "soft"
+        ? `
+ESTILO DE COPY:
+Leve e consultivo.
+- Seja mais acolhedor.
+- Tire duvidas antes de tentar fechar.
+- Use menos pressao e menos urgencia.
+- Convide o cliente a continuar a conversa.
+`
+        : `
+ESTILO DE COPY:
+Normal.
+- Seja claro, humano e objetivo.
+- Venda sem exagero e sem pressao.
+`;
+
   return `Voce e um vendedor humano brasileiro vendendo pelo WhatsApp. Responda de forma natural, direta e sem formalidade excessiva. Nunca use travessao. Use linguagem do dia a dia.
+
 
 PRODUTO ATUAL:
 ${productProfileText(productId)}
+
+${copyToneRules}
 
 REGRAS:
 - Use somente informacoes do PRODUTO ATUAL

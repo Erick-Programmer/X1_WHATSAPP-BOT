@@ -12,6 +12,7 @@ export interface ProductCatalogItem {
   recoveryPrice?: string;
   recoveryCheckoutUrl?: string;
   updatedAt: string;
+  copyTone?: "normal" | "direct" | "soft";
 }
 
 interface ProductCatalogFile {
@@ -35,6 +36,7 @@ function emptyCatalog(): ProductCatalogFile {
         checkoutUrl: "",
         deliveryMethod: "Digital em PDF, enviado por e-mail",
         productDescription: "Kit digital com planners em PDF e ebooks bonus para organizacao dos estudos.",
+        copyTone: "normal",
         updatedAt: now,
       },
     },
@@ -87,6 +89,7 @@ export const productCatalog = {
     productDescription: string;
     recoveryPrice?: string;
     recoveryCheckoutUrl?: string;
+    copyTone?: "normal" | "direct" | "soft";
   }): ProductCatalogItem {
     const data = this.load();
     const id = normalizeProductId(fields.id || fields.name);
@@ -101,6 +104,7 @@ export const productCatalog = {
       recoveryPrice: fields.recoveryPrice?.trim() || undefined,
       recoveryCheckoutUrl: fields.recoveryCheckoutUrl?.trim() || undefined,
       updatedAt: new Date().toISOString(),
+      copyTone: fields.copyTone === "direct" || fields.copyTone === "soft" ? fields.copyTone : "normal",
     };
 
     if (!item.name) throw new Error("Nome do produto e obrigatorio.");

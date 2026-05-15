@@ -2014,6 +2014,12 @@ function renderCommercial(state) {
         '<div style="margin-bottom:5px;"><label>Nome do produto</label><input type="text" id="comProductName" placeholder="Planner Estudante Pro" value="' + escapeHtml(state.settings?.productName || '') + '"></div>' +
         '<div style="margin-bottom:5px;"><label>ID do produto</label><input type="text" id="comProductId" placeholder="planner_estudante_pro" value="' + escapeHtml(activeId || '') + '"></div>' +
         '<div style="margin-bottom:5px;"><label>Preço</label><input type="text" id="comPrice" placeholder="R$ 47,00" value="' + escapeHtml(state.settings?.price || '') + '"></div>' +
+        '<div style="margin-bottom:5px;"><label>Tom de copy</label>' +
+        '<select id="comCopyTone" style="width:100%;padding:7px;border:1px solid #ccc;border-radius:4px;">' +
+          '<option value="normal">Normal</option>' +
+          '<option value="direct">Direto / persuasivo</option>' +
+          '<option value="soft">Leve / consultivo</option>' +
+        '</select></div>' +        
         '<div style="margin-bottom:5px;"><label>Link de checkout</label><input type="text" id="comCheckoutUrl" placeholder="https://checkout.eduzz.com/..." value="' + escapeHtml(state.settings?.checkoutUrl || '') + '"></div>' +
         '<div style="margin:8px 0 5px;padding:8px;background:#f8f9fa;border-radius:6px;"><strong>Checkout recuperação opcional</strong><div style="font-size:0.75rem;color:#666;">Use somente para lead parado ou objeção de preço.</div></div>' +
         '<div style="margin-bottom:5px;"><label>Preço recuperação</label><input type="text" id="comRecoveryPrice" placeholder="R$ 17,00" value="' + escapeHtml(state.settings?.recoveryPrice || '') + '"></div>' +
@@ -2025,6 +2031,10 @@ function renderCommercial(state) {
           '<button class="btn btn-primary" onclick="handleSaveCommercial()">Salvar configurações</button>' +
           (state.hasSettings ? '<button class="btn btn-secondary" onclick="cancelCommercialForm()">Cancelar</button>' : '') +
         '</div><div id="comMsg" class="success-msg"></div>';
+      setTimeout(function() {
+        var tone = document.getElementById('comCopyTone');
+        if (tone) tone.value = (activeProduct && activeProduct.copyTone) || 'normal';
+      }, 0);        
       return;
     }
     var s = state.settings || {};
@@ -2098,6 +2108,7 @@ async function handleSaveCommercial() {
   var productName = document.getElementById('comProductName').value.trim();
   var productId = document.getElementById('comProductId') ? document.getElementById('comProductId').value.trim() : '';
   var price = document.getElementById('comPrice').value.trim();
+  var copyTone = document.getElementById('comCopyTone') ? document.getElementById('comCopyTone').value : 'normal';
   var checkoutUrl = document.getElementById('comCheckoutUrl').value.trim();
   var recoveryPrice = document.getElementById('comRecoveryPrice').value.trim();
   var recoveryCheckoutUrl = document.getElementById('comRecoveryCheckoutUrl').value.trim();
@@ -2116,7 +2127,8 @@ async function handleSaveCommercial() {
       deliveryMethod: deliveryMethod,
       productDescription: productDescription,
       recoveryPrice: recoveryPrice,
-      recoveryCheckoutUrl: recoveryCheckoutUrl
+      recoveryCheckoutUrl: recoveryCheckoutUrl,
+      copyTone: copyTone,      
     });
     productCatalogState = await api('GET', '/api/products');
     activeProductId = productCatalogState.activeProductId || 'planner_estudante_pro';

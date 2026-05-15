@@ -39,3 +39,11 @@ Olá! Vi seu contato em um grupo de estudos e pensei em te enviar uma ideia para
 
 40 mensagens minimo por dia. nada mais
 
+=====================
+BANCO
+
+Passando aqui porque vi seu contato em um grupo de concursos bancários. Estou mostrando um material prático para quem estuda para Banco do Brasil ou Caixa e quer uma rota de estudos mais organizada. Posso te explicar rapidinho como funciona?
+
+Vi seu número em um grupo de estudos para concursos e queria te mostrar uma ideia simples para quem quer se preparar para BB e Caixa sem estudar de forma solta. Posso te explicar em poucas mensagens?
+
+Oi! Encontrei seu contato em um grupo de concursos bancários e pensei em te mostrar um material que ajuda a organizar toda a preparação para Banco do Brasil e Caixa em uma rota única e prática. Posso te mostrar rapidinho?

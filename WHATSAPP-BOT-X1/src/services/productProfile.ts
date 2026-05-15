@@ -13,6 +13,7 @@ export interface ProductProfile {
   includes: string[];
   benefits: string[];
   targetAudience: string[];
+  copyTone: "normal" | "direct" | "soft";
 }
 
 export function getProductProfile(productId: string = DEFAULT_PRODUCT_ID): ProductProfile {
@@ -31,6 +32,7 @@ export function getProductProfile(productId: string = DEFAULT_PRODUCT_ID): Produ
       includes: [catalogProduct.productDescription],
       benefits: [catalogProduct.productDescription],
       targetAudience: ["Cliente interessado no produto atual"],
+      copyTone: catalogProduct.copyTone || "normal",
     };
   }
 
@@ -55,6 +57,7 @@ export function getProductProfile(productId: string = DEFAULT_PRODUCT_ID): Produ
       ],
       benefits: productKnowledge.universalContent,
       targetAudience: productKnowledge.targetAudience,
+      copyTone: "normal",
     };
   }
 
@@ -70,6 +73,7 @@ export function getProductProfile(productId: string = DEFAULT_PRODUCT_ID): Produ
     includes: [description],
     benefits: [description],
     targetAudience: ["Cliente interessado no produto atual"],
+    copyTone: "normal",
   };
 }
 

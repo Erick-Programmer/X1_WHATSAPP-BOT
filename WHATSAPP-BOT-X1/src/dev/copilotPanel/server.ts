@@ -1358,6 +1358,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           productDescription: (body.productDescription as string) || "",
           recoveryPrice: (body.recoveryPrice as string) || "",
           recoveryCheckoutUrl: (body.recoveryCheckoutUrl as string) || "",
+          copyTone: body.copyTone === "direct" || body.copyTone === "soft" ? body.copyTone : "normal",
         });
 
         jsonResponse(res, 200, {
